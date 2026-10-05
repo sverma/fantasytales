@@ -1,5 +1,41 @@
 # Optional operations
 
+## Public static asset cache
+
+The supplied Nginx configuration caches only `/app.js`, `/styles.css`,
+`/landing.js`, `/landing.css`, `/favicon.svg`, and single-file SVG/WOFF2 assets
+under `/assets/`. Successful responses retain the application's one-hour
+browser cache policy and can be served from Nginx without contacting Node.
+The cache is bounded to 64 MB, with 2 MB of shared metadata; unused entries
+expire after two hours. Cache locking coalesces simultaneous misses.
+
+Nginx removes cookies and Authorization only on these public asset requests.
+It respects upstream `no-store`, `private`, and `Set-Cookie` protections.
+HTML, APIs, private media, and the separate authenticated monitoring panels
+do not use this cache. Avoid a general extension rule such as `*.jpg` that
+would accidentally match protected profile photos or API URLs. Access logs
+still record cache hits; the Node request metrics count only requests that
+actually reach the application.
+
+CSS, JavaScript, and larger SVGs are compressed with gzip when accepted by
+the browser, with `Vary: Accept-Encoding`. WOFF2 is already compressed.
+Inspect two successive requests to an asset: `X-Static-Cache` should change
+from `MISS` to `HIT`; `Cache-Control` should remain `public, max-age=3600`.
+Missing files must stay uncached. The application shell, APIs, and profile
+photos must retain `Cache-Control: no-store` and their authorization checks.
+
+After changing code or rolling back a release, clear only this regenerable
+cache as root, after the app is serving the intended release:
+
+```sh
+find /var/cache/nginx/fantasytales-static -type f -delete
+```
+
+Update changed assets' URL versions as described in [Deployment](DEPLOYMENT.md)
+to invalidate browser caches. Always run `nginx -t` before `systemctl reload
+nginx`. A graceful Nginx reload applies configuration without restarting the
+application. See the [Nginx proxy-cache documentation](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_cache).
+
 ## Backups
 
 `deploy/backup.py` uses SQLite's online backup API and retains seven days of
