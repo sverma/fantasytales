@@ -336,6 +336,18 @@ const server=http.createServer(async(req,res)=>{
           .map(p=>{const photos=profilePhotos(p.id);return {...p,image:photos[0] || '/assets/profile-placeholder.svg',photos,rating:publicRating(db,p.id)};});
         return json(res,200,{profiles:list});
       }
+      if(req.method==='GET' && path==='/api/featured-request') {
+        const featured=u.profile_id && db.prepare('SELECT published FROM profiles WHERE id=?').get(u.profile_id)?.published;
+        if(u.role==='admin' || featured)return json(res,200,{eligible:false});
+        if(!u.contact_done)return json(res,200,{eligible:true,requiresContact:true});
+        // Resolve the recipient by administrator role, never a member-controlled name.
+        const administrator=db.prepare(`SELECT p.id,p.name,a.id AS user_id FROM users a
+          JOIN profiles p ON p.id=a.profile_id WHERE a.role='admin' AND a.suspended=0 AND p.published=1 ORDER BY a.id`).all()
+          .find(a=>a.user_id!==u.id && !isBlocked(u.id,a.user_id));
+        if(!administrator)return json(res,200,{eligible:true,admin:null,connection:null});
+        const connection=db.prepare("SELECT id,status FROM connections WHERE user_id=? AND profile_id=? AND status IN ('pending','accepted')").get(u.id,administrator.id) || null;
+        return json(res,200,{eligible:true,admin:{id:administrator.id,name:administrator.name},connection});
+      }
       const fav=path.match(/^\/api\/favorites\/([a-z]+)$/);
       if(fav && req.method==='POST') {
         requireProfileAccess(u);

@@ -105,6 +105,43 @@ test('complete dating lifecycle, consent, authorization, privacy, and persistenc
     assert.equal(profiles.find(p=>p.id==='admin').image,'/media/admin/portrait.png');
     assert.equal((await member.call('/media/admin/portrait.jpg')).status,404,'The replaced Admin photo is no longer served.');
   });
+  await t.test('featured-profile requests identify the real Admin and protect contact-gated and featured accounts',async()=>{
+    assert.equal((await visitor.call('/api/featured-request')).status,401);
+    const waiting=await new Client().init();
+    await waiting.call('/api/auth/signup','POST',{username:'feature_waiting',pin:'012345',adultConsent:true,privacyConsent:true});
+    assert.deepEqual((await waiting.call('/api/featured-request')).body,{eligible:true,requiresContact:true});
+    const request=await member.call('/api/featured-request');
+    assert.equal(request.headers.get('cache-control'),'no-store');
+    assert.deepEqual(request.body,{eligible:true,admin:{id:'admin',name:'Admin'},connection:null});
+    assert.deepEqual((await admin.call('/api/featured-request')).body,{eligible:false});
+    assert.deepEqual((await owner.call('/api/featured-request')).body,{eligible:false});
+    await owner.call('/api/me','PATCH',{name:'Alex',whatsapp:'+12025550142'});
+    await admin.call('/api/admin/profiles/alex','PATCH',{published:false});
+    assert.equal((await owner.call('/api/featured-request')).body.eligible,true);
+    await admin.call('/api/admin/profiles/alex','PATCH',{published:true});
+    assert.equal((await owner.call('/api/featured-request')).body.eligible,false);
+    assert.equal((await waiting.call('/api/me','DELETE',{pin:'012345'})).status,200);
+  });
+  await t.test('featured requests reuse pending/accepted Admin connections and do not publish a profile',async()=>{
+    const candidate=await new Client().init();await candidate.signup('feature_candidate','Featured Candidate');
+    const recipient=(await candidate.call('/api/featured-request')).body.admin.id;
+    const hello=await candidate.call('/api/connections','POST',{profile:recipient,message:'Hello Admin, please share the email for my description, photos, and profile details.',shareContact:false});
+    assert.equal(hello.status,201);
+    assert.deepEqual((await candidate.call('/api/featured-request')).body.connection,{id:hello.body.id,status:'pending'});
+    assert.equal((await stranger.call('/api/featured-request')).body.connection,null,'Another member cannot see this request.');
+    assert.equal((await candidate.call('/api/connections','POST',{profile:recipient,message:'Duplicate hello to request featuring.'})).status,409);
+    await admin.call(`/api/connections/${hello.body.id}/respond`,'POST',{action:'accepted'});
+    assert.equal((await candidate.call('/api/featured-request')).body.connection.status,'accepted');
+    assert.equal((await candidate.call(`/api/connections/${hello.body.id}/messages`,'POST',{message:'Please send the submission email address.'})).status,201);
+    assert.equal((await candidate.call('/api/session')).body.user.profile_id,null);
+    assert.equal((await candidate.call('/api/featured-request')).body.eligible,true);
+    await candidate.call(`/api/connections/${hello.body.id}/block`,'POST',{});
+    assert.equal((await candidate.call('/api/featured-request')).body.admin,null,'Blocked Admin is not suggested.');
+    await admin.call('/api/admin/profiles/admin','PATCH',{published:false});
+    assert.equal((await member.call('/api/featured-request')).body.admin,null,'Hidden Admin profile is not disclosed.');
+    await admin.call('/api/admin/profiles/admin','PATCH',{published:true});
+    assert.equal((await candidate.call('/api/me','DELETE',{pin:'012345'})).status,200);
+  });
   let connection;
   await t.test('an introduction is pending and contact remains private',async()=>{
     const r=await member.call('/api/connections','POST',{profile:'alex',message:'Hello Alex! What made you smile today?',shareContact:true});

@@ -1,5 +1,25 @@
 # Optional operations
 
+## Featured profile requests
+
+Members without a published profile see **Want to be featured?** on Discover
+and Account. **Request a featured profile** opens an editable hello asking
+Admin for the email address where they can send their description, photos,
+and other profile details. Members must complete WhatsApp onboarding before
+contacting Admin. Opening the draft does not send it.
+
+The recipient is resolved from an active administrator account linked to a
+published profile, not from a display name. Pending hellos are reused; an
+accepted connection offers the same draft in the existing conversation.
+An unavailable or blocked administrator is not offered as a recipient.
+
+Admin receives the hello in Connections, accepts it, and replies with the
+submission email address. This workflow sends no email and publishes no
+profile automatically. The operator reviews the submitted materials and
+uses the existing private profile-import and account-linking workflow.
+Hidden profile owners can also request featuring; already featured owners
+and administrators do not see the invitation.
+
 ## Public static asset cache
 
 The supplied Nginx configuration caches only `/app.js`, `/styles.css`,

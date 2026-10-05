@@ -31,7 +31,7 @@ const paths = {
   logout:'<path d="M9 4H4v16h5m4-4 4-4-4-4m-5 4h13"/>',
 };
 const icon = (name,extra='') => `<svg class="icon ${extra}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || paths.spark}</svg>`;
-const state = {adminTab:'members',adminSearch:'',adminStatus:'all',adminMemberPage:1,adminMembers:null,user:null,csrf:'',profiles:[],connections:[],authMode:'signup',filter:'all',search:'',lastSent:null,page:'',visit:sessionStorage.getItem('ft_visit') || ''};
+const state = {adminTab:'members',adminSearch:'',adminStatus:'all',adminMemberPage:1,adminMembers:null,user:null,csrf:'',profiles:[],connections:[],featuredRequest:null,authMode:'signup',filter:'all',search:'',lastSent:null,page:'',visit:sessionStorage.getItem('ft_visit') || ''};
 let renderSequence=0, discoveryRefresh=0, toastTimeout, connectionTimer;
 
 async function api(path,method='GET',data) {
@@ -87,8 +87,25 @@ function cards() {
   const profiles=state.profiles.filter(p=>(state.filter!=='saved'||p.saved)&&p.name.toLowerCase().includes(state.search.toLowerCase()));
   return profiles.length ? profiles.map(profileCard).join('') : `<div class="empty-state">${icon('heart')}<h2>${state.search?'No names found.':'Keep a little possibility.'}</h2><p>${state.search?'Try another name, or clear your search.':'Tap the heart on a profile to save it here. Take your time getting to know someone.'}</p><button class="btn btn-secondary" data-action="reset-filter">Explore all profiles ${icon('arrow')}</button></div>`;
 }
+const featuredHello = "Hello Admin, I'd like to have a featured profile on Fantasy Tales. Could you please send me the email address where I can submit my description, photos, and other profile details?";
+function featuredInvite() {
+  const request=state.featuredRequest;
+  if(!request?.eligible)return '';
+  return `<aside class="featured-invite" aria-labelledby="featured-invite-title"><div><span class="eyebrow">Let the community discover you</span><h2 id="featured-invite-title">Want to be featured?</h2><p>Your profile isn't shown in Discover. Send Admin a hello and ask for the email address where you can send your description, photos, and other profile details.</p><p class="small muted">Admin reviews submissions before featuring a profile.</p></div><button class="btn btn-secondary" data-action="feature-request">Request a featured profile ${icon('arrow')}</button></aside>`;
+}
+function featuredRequestModal(request) {
+  if(!request.admin) {
+    openModal(`<button class="icon-btn modal-close" data-action="close-modal" aria-label="Close dialog">${icon('close')}</button><div class="modal-form"><h2 id="modal-title">Admin is unavailable.</h2><p>Admin isn't accepting new hellos right now. Please check back later to request the email address for your profile details and photos.</p><button class="btn btn-secondary btn-wide" data-action="close-modal">Got it</button></div>`);return;
+  }
+  const connection=request.connection;
+  const link=connection?`#connections/${connection.id}`:'#connections';
+  if(connection?.status==='pending') {
+    openModal(`<button class="icon-btn modal-close" data-action="close-modal" aria-label="Close dialog">${icon('close')}</button><div class="modal-form"><span class="eyebrow">A hello is on its way</span><h2 id="modal-title">Waiting for Admin.</h2><p>You already have a pending hello with Admin. Once they accept, ask for the email address where you can send your description, photos, and other profile details.</p><p class="small muted">Your profile stays hidden until Admin approves it.</p><a class="btn btn-primary btn-wide" href="${link}">View your hello ${icon('arrow')}</a></div>`);return;
+  }
+  openModal(`<button class="icon-btn modal-close" data-action="close-modal" aria-label="Close dialog">${icon('close')}</button><div class="modal-form"><span class="eyebrow">Your next chapter</span><h2 id="modal-title">Become a featured profile.</h2><p>${connection?'Ask Admin in your existing conversation for the email address to send your profile materials.':'Send Admin a hello asking for the email address to send your profile materials. When Admin accepts, they can reply in Connections.'}</p><form data-form="featured-request" data-profile="${esc(request.admin.id)}" ${connection?`data-connection="${connection.id}"`:''}><div class="form-error" role="alert"></div><div class="field"><label for="featured-message">Your message to Admin</label><textarea id="featured-message" name="message" required minlength="10" maxlength="1000">${esc(featuredHello)}</textarea></div><p class="field-help">Review or edit your message before sending. Admin will review your description, photos, and details before deciding whether to feature your profile.</p><button type="submit" class="btn btn-primary btn-wide">${connection?'Send message to Admin':'Send hello to Admin'} ${icon('send')}</button></form><a class="quiet-link" href="${link}">View Connections</a></div>`);
+}
 function discoverPage() {
-  return `<section class="page-container fade-in"><div class="discovery-top"><div><span class="eyebrow">A hello could change everything</span><h1>Find your <em>kind of magic.</em></h1><p>Take a look. Feel a spark. Start something with a thoughtful hello.</p></div><div class="community-note">${icon('shield')}<p>Real conversations begin with mutual interest. Always at your pace.</p></div></div><div class="discovery-toolbar"><div class="filters" role="group" aria-label="Filter profiles"><button class="filter ${state.filter==='all'?'active':''}" data-action="filter" data-filter="all" aria-pressed="${state.filter==='all'}">Discover all</button><button class="filter ${state.filter==='saved'?'active':''}" data-action="filter" data-filter="saved" aria-pressed="${state.filter==='saved'}">${icon('heart')} Saved</button></div><div class="search-field">${icon('search')}<input type="search" id="profile-search" placeholder="Find a name" aria-label="Search profiles by name" value="${esc(state.search)}"></div></div><p class="ratings-discovery-note"><span aria-hidden="true">★</span>AI ratings are subjective scores out of 5. Tap a score to see its breakdown.</p><div id="profile-grid" class="profile-grid">${cards()}</div><div class="discovery-bottom"><span>${icon('lock')}Profiles are visible to members only.</span><span>${icon('heart')}A connection is never a commitment.</span></div><div class="editorial-note"><p>“The best stories start with a little curiosity.”</p><span>Less scrolling. More feeling.</span></div></section>`;
+  return `<section class="page-container fade-in"><div class="discovery-top"><div><span class="eyebrow">A hello could change everything</span><h1>Find your <em>kind of magic.</em></h1><p>Take a look. Feel a spark. Start something with a thoughtful hello.</p></div><div class="community-note">${icon('shield')}<p>Real conversations begin with mutual interest. Always at your pace.</p></div></div>${featuredInvite()}<div class="discovery-toolbar"><div class="filters" role="group" aria-label="Filter profiles"><button class="filter ${state.filter==='all'?'active':''}" data-action="filter" data-filter="all" aria-pressed="${state.filter==='all'}">Discover all</button><button class="filter ${state.filter==='saved'?'active':''}" data-action="filter" data-filter="saved" aria-pressed="${state.filter==='saved'}">${icon('heart')} Saved</button></div><div class="search-field">${icon('search')}<input type="search" id="profile-search" placeholder="Find a name" aria-label="Search profiles by name" value="${esc(state.search)}"></div></div><p class="ratings-discovery-note"><span aria-hidden="true">★</span>AI ratings are subjective scores out of 5. Tap a score to see its breakdown.</p><div id="profile-grid" class="profile-grid">${cards()}</div><div class="discovery-bottom"><span>${icon('lock')}Profiles are visible to members only.</span><span>${icon('heart')}A connection is never a commitment.</span></div><div class="editorial-note"><p>“The best stories start with a little curiosity.”</p><span>Less scrolling. More feeling.</span></div></section>`;
 }
 function profileModal(id) {
   const p=state.profiles.find(p=>p.id===id);if(!p)return;
@@ -128,7 +145,7 @@ function connectionsPage() {
   return `<section class="page-container fade-in"><div class="section-heading"><div><span class="eyebrow">A little closer</span><h1>Your <em>connections.</em></h1><p>Thoughtful hellos and conversations worth keeping.</p></div><button class="btn btn-ghost btn-small" data-action="refresh">${icon('refresh')}Refresh</button></div><div id="connections-list" class="connections-list">${state.connections.length?state.connections.map(connectionCard).join(''):`<div class="empty-state">${icon('chat')}<h2>Your next story starts here.</h2><p>When you send or receive an introduction, you’ll find it here. A little curiosity goes a long way.</p><a class="btn btn-primary" href="#discover">Find a little magic ${icon('arrow')}</a></div>`}</div><p class="small muted">${state.connections.length?'Conversations refresh automatically while this page is open.':''}</p></section>`;
 }
 function accountPage(owner) {
-  return `<section class="page-container fade-in"><div class="section-heading"><div><span class="eyebrow">Entirely you</span><h1>Your little <em>corner.</em></h1><p>Make yourself at home. You’re in control of what you share.</p></div><button class="btn btn-ghost btn-small" data-action="logout">${icon('logout')}Sign out</button></div><div class="account-layout"><div class="settings-stack"><div class="settings-card"><h2>Your details</h2><p>Username: <strong>${esc(state.user.username)}</strong></p><form data-form="account"><div class="form-error" role="alert"></div><div class="field"><label for="account-name">Your name</label><input id="account-name" name="name" required minlength="2" maxlength="60" value="${esc(state.user.name)}" autocomplete="given-name"></div><div class="field"><label for="account-phone">WhatsApp number (required)</label><input id="account-phone" name="whatsapp" type="tel" autocomplete="tel" inputmode="tel" maxlength="25" required placeholder="+91 98765 43210" value="${esc(state.user.whatsapp)}"><p class="field-help">Required to browse profiles and included in the administrator’s private CSV. Other members only see it after an accepted introduction if you choose to share it.</p></div><button class="btn btn-primary" type="submit">Save your details ${icon('check')}</button></form></div>${owner?`<div class="settings-card"><h2>Your public profile</h2><p>A few words that sound like you.</p><form data-form="owner-profile"><div class="form-error" role="alert"></div><div class="field"><label for="profile-prompt">Your headline</label><input id="profile-prompt" name="prompt" value="${esc(owner.prompt)}" required minlength="5" maxlength="100"></div><div class="field"><label for="profile-bio">About you</label><textarea id="profile-bio" name="bio" required minlength="10" maxlength="500">${esc(owner.bio)}</textarea></div><button class="btn btn-primary" type="submit">Update profile ${icon('check')}</button></form></div>`:''}</div><div class="settings-stack"><div class="settings-card"><h2>Keep it private.</h2><p>Keep your six-digit PIN to yourself. You can change it here.</p>${pinForm()}</div>${state.user.role==='member'?`<div class="settings-card danger-section"><h2>Time for a pause?</h2><p>Deleting your account removes your details, introductions, favorites, and chat messages. Security visit logs expire within 30 days; protected backups expire within 7 days.</p><button class="btn btn-danger btn-small" data-action="delete-confirm">Delete my account</button></div>`:`<div class="settings-card"><h2>Your community role</h2><p>${state.user.role==='owner'?'You own a featured profile. Incoming hellos appear in Connections. Only you can accept them.':'You manage this community. Introductions to your Admin profile appear in Connections. Open Admin for activity totals, profile visibility, reports, and the connections CSV.'}</p><a class="btn btn-secondary" href="#${state.user.role==='owner'?'connections':'admin'}">${state.user.role==='owner'?'Open your inbox':'Open administration'} ${icon('arrow')}</a></div>`}</div></div></section>`;
+  return `<section class="page-container fade-in"><div class="section-heading"><div><span class="eyebrow">Entirely you</span><h1>Your little <em>corner.</em></h1><p>Make yourself at home. You’re in control of what you share.</p></div><button class="btn btn-ghost btn-small" data-action="logout">${icon('logout')}Sign out</button></div>${featuredInvite()}<div class="account-layout"><div class="settings-stack"><div class="settings-card"><h2>Your details</h2><p>Username: <strong>${esc(state.user.username)}</strong></p><form data-form="account"><div class="form-error" role="alert"></div><div class="field"><label for="account-name">Your name</label><input id="account-name" name="name" required minlength="2" maxlength="60" value="${esc(state.user.name)}" autocomplete="given-name"></div><div class="field"><label for="account-phone">WhatsApp number (required)</label><input id="account-phone" name="whatsapp" type="tel" autocomplete="tel" inputmode="tel" maxlength="25" required placeholder="+91 98765 43210" value="${esc(state.user.whatsapp)}"><p class="field-help">Required to browse profiles and included in the administrator’s private CSV. Other members only see it after an accepted introduction if you choose to share it.</p></div><button class="btn btn-primary" type="submit">Save your details ${icon('check')}</button></form></div>${owner?`<div class="settings-card"><h2>Your public profile</h2><p>A few words that sound like you.</p><form data-form="owner-profile"><div class="form-error" role="alert"></div><div class="field"><label for="profile-prompt">Your headline</label><input id="profile-prompt" name="prompt" value="${esc(owner.prompt)}" required minlength="5" maxlength="100"></div><div class="field"><label for="profile-bio">About you</label><textarea id="profile-bio" name="bio" required minlength="10" maxlength="500">${esc(owner.bio)}</textarea></div><button class="btn btn-primary" type="submit">Update profile ${icon('check')}</button></form></div>`:''}</div><div class="settings-stack"><div class="settings-card"><h2>Keep it private.</h2><p>Keep your six-digit PIN to yourself. You can change it here.</p>${pinForm()}</div>${state.user.role==='member'?`<div class="settings-card danger-section"><h2>Time for a pause?</h2><p>Deleting your account removes your details, introductions, favorites, and chat messages. Security visit logs expire within 30 days; protected backups expire within 7 days.</p><button class="btn btn-danger btn-small" data-action="delete-confirm">Delete my account</button></div>`:`<div class="settings-card"><h2>Your community role</h2><p>${state.user.role==='owner'?(owner?.published?'Your profile is featured in Discover. Incoming hellos appear in Connections. Only you can accept them.':'Your profile is hidden from Discover. You can still manage your details and existing conversations.'):'You manage this community. Introductions to your Admin profile appear in Connections. Open Admin for activity totals, profile visibility, reports, and the connections CSV.'}</p><a class="btn btn-secondary" href="#${state.user.role==='owner'?'connections':'admin'}">${state.user.role==='owner'?'Open your inbox':'Open administration'} ${icon('arrow')}</a></div>`}</div></div></section>`;
 }
 function memberTools(data) {
   const statusOptions=[['all','All members'],['active','Active'],['suspended','Suspended']];
@@ -176,12 +193,13 @@ async function render() {
     else if(page==='pin-setup') html=pinSetupPage();
     else if(['name','contact'].includes(page)) html=onboarding(page);
     else if(page==='discover'||page==='introduce') {
-      state.profiles=(await api('/api/profiles')).profiles;
+      const [profiles,featured]=await Promise.all([api('/api/profiles'),page==='discover'?api('/api/featured-request'):Promise.resolve(null)]);
+      state.profiles=profiles.profiles;if(featured)state.featuredRequest=featured;
       if(page==='introduce'){const p=state.profiles.find(p=>p.id===id);if(!p){goto('discover');return;}if(p.id===state.user.profile_id){goto('account');return;}html=introPage(p);}
       else html=discoverPage();
     } else if(page==='sent') html=successPage();
     else if(page==='connections'){state.connections=(await api('/api/connections')).connections;html=connectionsPage();}
-    else if(page==='account'){const owner=state.user.profile_id?(await api('/api/owner/profile')).profile:null;html=accountPage(owner);}
+    else if(page==='account'){const [owner,featured]=await Promise.all([state.user.profile_id?api('/api/owner/profile'):Promise.resolve(null),api('/api/featured-request')]);state.featuredRequest=featured;html=accountPage(owner?.profile);}
     else if(page==='admin'){
       if(state.user.role!=='admin'){goto('discover');return;}
       const query=new URLSearchParams({search:state.adminSearch,status:state.adminStatus,page:String(state.adminMemberPage)});
@@ -198,7 +216,10 @@ async function render() {
     event('page_open',{page});
     window.scrollTo({top:0,behavior:'instant'});
     $('#main').focus({preventScroll:true});
-    if(page==='connections') connectionTimer=setInterval(refreshConnections,15000);
+    if(page==='connections') {
+      connectionTimer=setInterval(refreshConnections,15000);
+      if(/^[a-f0-9-]{36}$/.test(id || '')){const card=$(`[data-connection="${id}"]`);if(card){card.tabIndex=-1;card.scrollIntoView({block:'start'});card.focus({preventScroll:true});}}
+    }
   } catch(e) {
     if(e.status===401){state.user=null;clearAdminState();goto('welcome');return;}
     if(e.code==='PIN_REQUIRED'){state.user.needs_pin=1;goto('pin-setup');return;}
@@ -233,6 +254,10 @@ async function submitForm(form) {
       if(kind==='account'){toast('Your details have been saved.');shell();}else goto(nextPage());
     } else if(kind==='introduce') {
       state.lastSent=await api('/api/connections','POST',{profile:form.dataset.profile,message:data.message,shareContact:data.shareContact==='on'});goto('sent');
+    } else if(kind==='featured-request') {
+      const connection=form.dataset.connection;
+      const result=connection?await api(`/api/connections/${connection}/messages`,'POST',{message:data.message}):await api('/api/connections','POST',{profile:form.dataset.profile,message:data.message,shareContact:false});
+      goto(`connections/${connection || result.id}`);toast(connection?'Your message was sent to Admin.':'Your hello was sent to Admin. Check Connections for their reply.');
     } else if(kind==='chat') {
       await api(`/api/connections/${form.dataset.id}/messages`,'POST',{message:data.message});form.reset();
       state.connections=(await api('/api/connections')).connections;
@@ -261,6 +286,13 @@ document.addEventListener('click',async e=>{
     if(action==='auth-mode'){state.authMode=b.dataset.mode;$('#main').innerHTML=authPage();}
     else if(action==='toggle-secret'){const input=document.getElementById(b.dataset.target);input.type=input.type==='password'?'text':'password';b.innerHTML=icon(input.type==='password'?'eye':'eyeoff');b.setAttribute('aria-label',`${input.type==='password'?'Show':'Hide'} ${b.dataset.label}`);}
     else if(action==='rating-info'){ratingInfo(b.dataset.id);}
+    else if(action==='feature-request'){
+      b.disabled=true;const request=await api('/api/featured-request');state.featuredRequest=request;
+      if(!request.eligible){await render();toast('Your profile is already featured.');}
+      else if(request.requiresContact){goto('contact');toast('Add your WhatsApp number before contacting Admin.');}
+      else featuredRequestModal(request);
+      b.disabled=false;
+    }
     else if(action==='run-ratings'){b.disabled=true;await api('/api/admin/ratings/run','POST',{});await render();toast('Changed profiles are queued for assessment.');}
     else if(action==='logout'){await api('/api/auth/logout','POST',{});state.user=null;clearAdminState();state.profiles=[];state.connections=[];sessionStorage.removeItem('ft_visit');state.visit='';await initSession();goto('welcome');}
     else if(action==='profile')profileModal(id);
@@ -275,9 +307,10 @@ document.addEventListener('click',async e=>{
       $('#main').innerHTML=discoverPage();
       if(next==='all'){
         const sequence=renderSequence,request=++discoveryRefresh;
-        const profiles=(await api('/api/profiles')).profiles;
+        const [response,featured]=await Promise.all([api('/api/profiles'),api('/api/featured-request')]);
+        const profiles=response.profiles;
         if(state.page!=='discover'||sequence!==renderSequence||request!==discoveryRefresh)return;
-        state.profiles=profiles;$('#profile-grid').innerHTML=cards();
+        state.profiles=profiles;state.featuredRequest=featured;$('#main').innerHTML=discoverPage();
       }
     }
     else if(action==='refresh')await render();

@@ -14,6 +14,8 @@ ratings. The public site is [fantasytales.org](https://fantasytales.org).
 - Private photo galleries, saved profiles, introductions, and messaging after
   acceptance. Contact sharing is optional and follows acceptance.
 - Profile-owner biography editing; member blocking and reporting.
+- Featured-profile requests from Discover and Account: an editable hello asks
+  Admin for the email address to submit photos and profile details for review.
 - Administrator member search, suspension/reactivation, PIN resets, audit
   history, profile publishing, AI configuration, and private CSV exports.
 - Daily AI reassessment when profile text or photos change; unchanged profiles

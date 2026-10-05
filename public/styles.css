@@ -52,3 +52,10 @@
 @media(max-width:700px){.admin-heading{align-items:flex-start;flex-direction:column}.member-search{grid-template-columns:minmax(0,1fr)}.member-search .btn{width:100%}.admin-member{grid-template-columns:minmax(0,1fr);padding:18px}.member-details{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.member-actions{flex-direction:row;flex-wrap:wrap}.member-actions .btn{flex:1}.member-heading{align-items:flex-start}.member-heading .pill{white-space:nowrap}.member-directory{padding:20px}.member-pagination{gap:8px}.member-pagination .btn{padding:10px 12px}.member-pagination span{font-size:10px}}
 
 .profile-external-link{color:var(--gold);text-decoration:underline;text-underline-offset:3px;overflow-wrap:anywhere}.profile-external-link:hover{color:var(--text)}
+
+/* Invitation for members and profile owners who are not featured in Discover. */
+.featured-invite{display:flex;align-items:center;justify-content:space-between;gap:28px;padding:25px 28px;margin:0 0 30px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(120deg,#2b1c25,#1c151b)}
+.featured-invite>div{max-width:690px}.featured-invite h2{font-size:30px;margin:8px 0 10px}.featured-invite p{line-height:1.7;margin:0 0 8px}.featured-invite p:last-child{margin-bottom:0}.featured-invite>.btn{flex-shrink:0}.connection-card{scroll-margin-top:120px}
+.discovery-top+.featured-invite{margin-top:28px}
+#featured-message{min-height:165px}form[data-form="featured-request"]>.field-help{margin-bottom:18px}
+@media(max-width:800px){.featured-invite{align-items:stretch;flex-direction:column;gap:19px;padding:22px}.featured-invite>.btn{width:100%;white-space:normal;text-align:center}.featured-invite h2{font-size:28px}}
