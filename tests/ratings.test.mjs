@@ -34,7 +34,7 @@ test('production CLI runs through a release symlink and consumes a disabled queu
 });
 
 test('snapshot includes all photo content and profile details, excluding private account fields',t=>{
-  const f=fixture(t),profile={...f.db.prepare('SELECT * FROM profiles').get(),whatsapp:'private-phone',password:'private-pin'};
+  const f=fixture(t),profile={...f.db.prepare('SELECT * FROM profiles').get(),whatsapp:'private-phone',telegram:'private-telegram',line:'private-line',password:'private-pin'};
   const a=profileSnapshot(profile,f.mediaDir);
   assert.deepEqual(a.text,{headline:profile.prompt,biography:profile.bio});
   assert.equal(profileSnapshot(profile,f.mediaDir).hash,a.hash);

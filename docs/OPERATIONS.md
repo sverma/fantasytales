@@ -1,11 +1,35 @@
 # Optional operations
 
+## Messenger contact options
+
+Members provide at least one WhatsApp number, Telegram username, or LINE ID to
+browse profiles and photos. Onboarding asks for one messenger; Account supports
+all three and permits replacing a number with a username. Empty contacts cannot
+bypass the server gate. Only basic text/length formatting is checked; the app
+performs no ownership, existence, OTP, or messenger API verification.
+
+Startup adds `users.telegram`, `users.line`, and `connections.share_messengers`
+without changing existing data. Admin member search includes all three contacts.
+Private connection CSVs append Telegram and LINE columns after the existing
+columns, and contact edits refresh existing export rows. Contact values are not
+included in activity logs, public profiles, aggregate metrics, or AI assessments.
+
+Sharing stays optional and requires an accepted introduction. New clients send
+`shareMessengerContacts: true` with `shareContact: true` only after the user opts
+in to sharing all provided messenger contacts. Existing WhatsApp-only permissions
+retain their scope. The legacy `contact` response field remains a WhatsApp string;
+`contacts` contains the authorized messenger fields or is null when not shared.
+
+Rollbacks preserve the added columns. A release predating this feature cannot
+unlock profiles for members who provided only Telegram or LINE, so prefer a
+forward fix after those members start registering.
+
 ## Featured profile requests
 
 Members without a published profile see **Want to be featured?** on Discover
 and Account. **Request a featured profile** opens an editable hello asking
 Admin for the email address where they can send their description, photos,
-and other profile details. Members must complete WhatsApp onboarding before
+and other profile details. Members must add WhatsApp, Telegram, or LINE contact information before
 contacting Admin. Opening the draft does not send it.
 
 The recipient is resolved from an active administrator account linked to a

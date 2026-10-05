@@ -51,15 +51,15 @@ test('complete dating lifecycle, consent, authorization, privacy, and persistenc
   const member=await new Client().init(), stranger=await new Client().init(), owner=await new Client().init(), admin=await new Client().init();
   await member.signup('tester','=HYPERLINK("evil")');await stranger.signup('stranger','Another Member');await owner.login('alex');await admin.login('site-admin');
   const incomplete=await new Client().init();
-  await t.test('WhatsApp is required on the server before profiles, photos, favorites, or introductions',async()=>{
+  await t.test('A contact detail is required on the server before profiles, photos, favorites, or introductions',async()=>{
     assert.equal((await incomplete.call('/api/auth/signup','POST',{username:'phone_gate',pin:'012345',adultConsent:true,privacyConsent:true})).status,200);
     await incomplete.call('/api/me','PATCH',{name:'Contact Gate Test'});
     for(const path of ['/api/profiles','/media/alex/portrait.png','/media/alex/photo-02.png']) {
-      const r=await incomplete.call(path);assert.equal(r.status,403);assert.equal(r.body.code,'WHATSAPP_REQUIRED');
+      const r=await incomplete.call(path);assert.equal(r.status,403);assert.equal(r.body.code,'CONTACT_REQUIRED');
     }
     assert.equal((await incomplete.call('/api/favorites/alex','POST',{saved:true})).status,403);
     assert.equal((await incomplete.call('/api/connections','POST',{profile:'alex',message:'Attempt before a number is provided'})).status,403);
-    assert.equal((await admin.call('/api/profiles')).status,403,'Administrator profile browsing also requires WhatsApp.');
+    assert.equal((await admin.call('/api/profiles')).status,403,'Administrator profile browsing also requires a contact detail.');
     assert.equal((await admin.call('/api/admin')).status,200,'Account administration remains available.');
   });
   await t.test('empty and invalid WhatsApp values are rejected without completing onboarding',async()=>{
@@ -69,7 +69,7 @@ test('complete dating lifecycle, consent, authorization, privacy, and persistenc
     assert.equal((await incomplete.call('/api/session')).body.user.contact_done,0);
     assert.equal((await incomplete.call('/api/profiles')).status,403);
   });
-  await t.test('legacy skipped-contact accounts must enter a number despite their old completion flag',async()=>{
+  await t.test('legacy skipped-contact accounts must add contact details despite their old completion flag',async()=>{
     const {DatabaseSync}=await import('node:sqlite');const fixture=new DatabaseSync(join(data,'fantasytales.sqlite'));
     fixture.prepare("UPDATE users SET contact_done=1,whatsapp='' WHERE username='phone_gate'").run();fixture.close();
     assert.equal((await incomplete.call('/api/session')).body.user.contact_done,0);
@@ -80,6 +80,54 @@ test('complete dating lifecycle, consent, authorization, privacy, and persistenc
     assert.equal((await incomplete.call('/api/me','PATCH',{name:'Must not be saved',whatsapp:''})).status,400);
     const preserved=(await incomplete.call('/api/session')).body.user;
     assert.equal(preserved.name,'Contact Gate Test');assert.equal(preserved.whatsapp,'+12025550142');
+  });
+  await t.test('Telegram-only and LINE-only members unlock all profile routes and can replace their contact',async()=>{
+    for(const [key,value] of [['telegram','@fictional_telegram'],['line','fictional.line']]) {
+      const candidate=await new Client().init();
+      assert.equal((await candidate.call('/api/auth/signup','POST',{username:'only_'+key,pin:'012345',adultConsent:true,privacyConsent:true})).status,200);
+      for(const invalid of ['', ' ', '@', 'two words', 'a'.repeat(101), 'bad\u0000id', null, {}, 123])
+        assert.equal((await candidate.call('/api/me','PATCH',{[key]:invalid})).status,400);
+      const saved=await candidate.call('/api/me','PATCH',{name:'Messenger Test',whatsapp:'',[key]:'  '+value+'  '});
+      assert.equal(saved.status,200);assert.equal(saved.body.user[key],value);assert.equal(saved.body.user.whatsapp,'');assert.equal(saved.body.user.contact_done,1);
+      assert.equal((await candidate.call('/api/profiles')).status,200);
+      assert.equal((await candidate.call('/media/alex/portrait.png')).status,200);
+      assert.equal((await candidate.call('/api/favorites/alex','POST',{saved:true})).status,200);
+      assert.equal((await candidate.call('/api/featured-request')).body.admin.id,'admin');
+      const listed=(await admin.call('/api/admin/members?search='+encodeURIComponent(value.toUpperCase()))).body;
+      assert.equal(listed.total,1);assert.equal(listed.members[0][key],value);
+      const attempt=await candidate.call('/api/me','PATCH',{name:'Must remain unchanged',whatsapp:'',telegram:' ',line:''});
+      assert.equal(attempt.status,400);assert.equal((await candidate.call('/api/session')).body.user.name,'Messenger Test');
+      const replacement=key==='telegram'?'line':'telegram';
+      assert.equal((await candidate.call('/api/me','PATCH',{[key]:'',[replacement]:'replacement_id'})).status,200);
+      assert.equal((await candidate.call('/api/profiles')).status,200);
+      assert.equal((await candidate.call('/api/me','DELETE',{pin:'012345'})).status,200);
+    }
+  });
+  await t.test('messenger sharing needs explicit consent and acceptance; exports include contacts privately',async()=>{
+    const candidate=await new Client().init();await candidate.signup('contact_sharing','Contact Sharing');
+    await candidate.call('/api/me','PATCH',{whatsapp:'',telegram:'@private_telegram',line:'=private_line'});
+    const privateHello=await candidate.call('/api/connections','POST',{profile:'alex',message:'Hello, a private contact sharing test.',shareContact:false,shareMessengerContacts:true});
+    assert.equal(privateHello.status,201);
+    await owner.call(`/api/connections/${privateHello.body.id}/respond`,'POST',{action:'accepted'});
+    assert.equal((await owner.call('/api/connections')).body.connections.find(c=>c.id===privateHello.body.id).contacts,null);
+    const shared=await candidate.call('/api/connections','POST',{profile:'admin',message:'Hello, an explicit contact sharing test.',shareContact:true,shareMessengerContacts:true});
+    assert.equal(shared.status,201);
+    assert.equal((await admin.call('/api/connections')).body.connections.find(c=>c.id===shared.body.id).contacts,null);
+    await admin.call(`/api/connections/${shared.body.id}/respond`,'POST',{action:'accepted'});
+    assert.deepEqual((await admin.call('/api/connections')).body.connections.find(c=>c.id===shared.body.id).contacts,{whatsapp:'',telegram:'@private_telegram',line:'=private_line'});
+    assert.equal((await candidate.call('/api/connections')).body.connections.find(c=>c.id===shared.body.id).contacts,null);
+    assert.equal((await stranger.call('/api/connections')).body.connections.some(c=>c.id===shared.body.id),false);
+    assert.equal((await candidate.call('/api/admin/export')).status,403);
+    const csv=(await admin.call('/api/admin/export')).body;
+    assert.match(csv.split('\r\n')[0],/"Connection ID","Telegram","LINE"$/);
+    const row=csv.split('\r\n').find(r=>r.includes(shared.body.id));assert.ok(row.includes("'@private_telegram"));assert.ok(row.includes("'=private_line"));
+    await candidate.call('/api/me','PATCH',{telegram:'updated_telegram',line:''});
+    const updated=readFileSync(join(data,'connections.csv'),'utf8');assert.ok(updated.includes('updated_telegram'));assert.ok(!updated.includes('@private_telegram'));assert.ok(!updated.includes('=private_line'));
+    const profileText=JSON.stringify((await stranger.call('/api/profiles')).body);assert.ok(!profileText.includes('updated_telegram'));
+    const day=readdirSync(join(data,'visits'))[0];const logs=readdirSync(join(data,'visits',day)).map(f=>readFileSync(join(data,'visits',day,f),'utf8')).join('');
+    for(const value of ['@private_telegram','=private_line','updated_telegram'])assert.ok(!logs.includes(value));
+    assert.equal((await candidate.call('/api/me','DELETE',{pin:'012345'})).status,200);
+    assert.ok(!readFileSync(join(data,'connections.csv'),'utf8').includes('updated_telegram'));
   });
   await t.test('onboarding validates contact and profile favorites persist',async()=>{
     assert.equal((await member.call('/api/me','PATCH',{whatsapp:'invalid'})).status,400);
@@ -157,6 +205,9 @@ test('complete dating lifecycle, consent, authorization, privacy, and persistenc
     assert.equal((await owner.call(`/api/connections/${connection}/respond`,'POST',{action:'accepted'})).status,200);
     assert.equal((await owner.call(`/api/connections/${connection}/respond`,'POST',{action:'declined'})).status,409);
     assert.equal((await owner.call('/api/connections')).body.connections[0].contact,'+12025550142');
+    await member.call('/api/me','PATCH',{telegram:'legacy_private_tg',line:'legacy_private_line'});
+    assert.deepEqual((await owner.call('/api/connections')).body.connections[0].contacts,{whatsapp:'+12025550142',telegram:'',line:''},'Legacy WhatsApp consent must not expose new messenger fields.');
+    await member.call('/api/me','PATCH',{telegram:'',line:''});
     assert.equal((await member.call(`/api/connections/${connection}/messages`,'POST',{message:'Nice to meet you! <script>alert(1)</script>'})).status,201);
     assert.equal((await stranger.call(`/api/connections/${connection}/messages`,'POST',{message:'Intrusion attempt'})).status,404);
     const r=await owner.call('/api/connections');assert.equal(r.body.connections[0].messages.length,1);assert.equal(r.body.connections[0].messages[0].mine,false);

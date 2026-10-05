@@ -2,7 +2,7 @@ import http from 'node:http';
 import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, readdirSync, rmSync } from 'node:fs';
 import { join, resolve, extname } from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
-import { db, dataDir, token, hashToken, hashPassword, checkPassword, exportCSV, validWhatsApp, validPIN, generatePIN } from './lib.mjs';
+import { db, dataDir, token, hashToken, hashPassword, checkPassword, exportCSV, validWhatsApp, validMessenger, hasContact, validPIN, generatePIN } from './lib.mjs';
 import {publicRating,adminRatings,saveRatingKey,readRatingKey,queueRatings} from './ratings.mjs';
 import {createAppMetrics} from './metrics.mjs';
 import {publicPaths,publicPage,robots,sitemap} from './seo.mjs';
@@ -50,8 +50,8 @@ function rotateSession(req,res,userId) {
   return csrf;
 }
 function getUser(s) {
-  const u=s?.user_id ? db.prepare("SELECT id,username,name,whatsapp,contact_done,role,profile_id,auth_kind='password' AS needs_pin FROM users WHERE id=? AND suspended=0").get(s.user_id) : null;
-  return u ? {...u,contact_done:Number(Boolean(u.contact_done) && validWhatsApp(u.whatsapp))} : null;
+  const u=s?.user_id ? db.prepare("SELECT id,username,name,whatsapp,telegram,line,contact_done,role,profile_id,auth_kind='password' AS needs_pin FROM users WHERE id=? AND suspended=0").get(s.user_id) : null;
+  return u ? {...u,contact_done:Number(hasContact(u))} : null;
 }
 function requireUser(s,allowLegacy=false) {
   const u=getUser(s); if(!u) fail(401,'Please sign in to continue.');
@@ -59,7 +59,7 @@ function requireUser(s,allowLegacy=false) {
   return u;
 }
 function requireProfileAccess(u) {
-  if(!u.contact_done || !validWhatsApp(u.whatsapp)) throw new HttpError(403,'Enter your WhatsApp number, including country code, before viewing profiles.','WHATSAPP_REQUIRED');
+  if(!hasContact(u)) throw new HttpError(403,'Add a WhatsApp number, Telegram username, or LINE ID before viewing profiles.','CONTACT_REQUIRED');
   return u;
 }
 function requireAdmin(s) { const u=requireUser(s); if(u.role!=='admin') fail(403,'This page is only available to the site administrator.'); return u; }
@@ -283,18 +283,23 @@ const server=http.createServer(async(req,res)=>{
       }
       const u=requireUser(s,path==='/api/me/pin');
       if(req.method==='PATCH' && path==='/api/me') {
-        const b=await body(req);
-        const name='name' in b ? clean(b.name,61) : null;
-        const phone='whatsapp' in b ? clean(b.whatsapp,30).replace(/[\s()-]/g,'') : null;
-        if(name!==null && (name.length<2 || name.length>60)) fail(400,'Please enter a name between 2 and 60 characters.');
-        if(phone!==null && !validWhatsApp(phone)) fail(400,'WhatsApp is required. Include your country code, for example +91 98765 43210.');
-        if('name' in b) {
-          db.prepare('UPDATE users SET name=? WHERE id=?').run(name,u.id);log(req,res,'NAME_SAVED',{name,userId:u.id});
+        const b=await body(req),current=requireUser(s),name='name' in b ? clean(b.name,61) : current.name;
+        if('name' in b && (name.length<2 || name.length>60)) fail(400,'Please enter a name between 2 and 60 characters.');
+        const contacts={whatsapp:current.whatsapp,telegram:current.telegram,line:current.line};
+        const changed=['whatsapp','telegram','line'].filter(key=>key in b);
+        for(const key of changed) {
+          if(typeof b[key]!=='string')fail(400,'Enter contact details as text.');
+          contacts[key]=key==='whatsapp'?b[key].trim().replace(/[\s()-]/g,''):b[key].trim();
+          if(contacts[key] && !(key==='whatsapp'?validWhatsApp(contacts[key]):validMessenger(contacts[key])))
+            fail(400,key==='whatsapp'?'Include your country code, for example +91 98765 43210.':'Enter a Telegram username or LINE ID of up to 100 characters without spaces.');
         }
-        if('whatsapp' in b) {
-          db.prepare('UPDATE users SET whatsapp=?,contact_done=1 WHERE id=?').run(phone,u.id);log(req,res,'CONTACT_SAVED',{provided:!!phone,userId:u.id});
-        }
-        if(name!==null || phone!==null) syncExport();
+        if(changed.length && !hasContact(contacts))fail(400,'Add at least one: WhatsApp number, Telegram username, or LINE ID.');
+        // Validate the full merged update before writing any field.
+        db.prepare('UPDATE users SET name=?,whatsapp=?,telegram=?,line=?,contact_done=? WHERE id=?')
+          .run(name,contacts.whatsapp,contacts.telegram,contacts.line,Number(hasContact(contacts)),u.id);
+        if('name' in b)log(req,res,'NAME_SAVED',{name,userId:u.id});
+        if(changed.length)log(req,res,'CONTACT_SAVED',{provided:hasContact(contacts),userId:u.id});
+        if('name' in b || changed.length)syncExport();
         return json(res,200,{user:getUser(s)});
       }
       if(req.method==='POST' && path==='/api/me/pin') {
@@ -368,17 +373,19 @@ const server=http.createServer(async(req,res)=>{
         const existing=db.prepare("SELECT id FROM connections WHERE user_id=? AND profile_id=? AND status IN ('pending','accepted')").get(u.id,p.id);
         if(existing) fail(409,'You already have an introduction with this person. Find it in Connections.');
         const id=randomUUID(), now=new Date().toISOString();
-        db.prepare('INSERT INTO connections(id,user_id,profile_id,message,share_contact,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').run(id,u.id,p.id,message,b.shareContact===true && !!u.whatsapp ? 1 : 0,now,now);
+        db.prepare('INSERT INTO connections(id,user_id,profile_id,message,share_contact,share_messengers,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)').run(id,u.id,p.id,message,b.shareContact===true ? 1 : 0,b.shareContact===true && b.shareMessengerContacts===true ? 1 : 0,now,now);
         syncExport();log(req,res,'INTRODUCTION_SENT',{user:u.name,profile:p.name,id});
         return json(res,201,{id,profile:p.name,status:'pending'});
       }
       if(req.method==='GET' && path==='/api/connections') {
-        const rows=db.prepare(`SELECT c.*,u.name AS from_name,u.username AS from_username,u.whatsapp AS from_whatsapp,p.name AS profile_name FROM connections c JOIN users u ON u.id=c.user_id JOIN profiles p ON p.id=c.profile_id WHERE c.user_id=? OR c.profile_id=? ORDER BY c.created_at DESC`).all(u.id,u.profile_id || '');
+        const rows=db.prepare(`SELECT c.*,u.name AS from_name,u.username AS from_username,u.whatsapp AS from_whatsapp,u.telegram AS from_telegram,u.line AS from_line,p.name AS profile_name FROM connections c JOIN users u ON u.id=c.user_id JOIN profiles p ON p.id=c.profile_id WHERE c.user_id=? OR c.profile_id=? ORDER BY c.created_at DESC`).all(u.id,u.profile_id || '');
         const list=rows.filter(c=>!isBlocked(c.user_id,profileOwner(c.profile_id)?.id)).map(c=>{
           const incoming=c.profile_id===u.profile_id;
-          const contact=incoming && c.status==='accepted' && c.share_contact ? c.from_whatsapp : '';
+          const share=incoming && c.status==='accepted' && c.share_contact;
+          const contact=share ? c.from_whatsapp : '';
+          const contacts=share ? {whatsapp:contact,telegram:c.share_messengers?c.from_telegram:'',line:c.share_messengers?c.from_line:''} : null;
           const messages=c.status==='accepted' ? db.prepare('SELECT m.id,m.text,m.created_at,m.sender_id,u.name AS sender FROM messages m JOIN users u ON u.id=m.sender_id WHERE m.connection_id=? ORDER BY m.id DESC LIMIT 100').all(c.id).reverse() : [];
-          return {id:c.id,profile_id:c.profile_id,image:profilePhotos(c.profile_id)[0],name:incoming ? c.from_name : c.profile_name,message:c.message,status:c.status,created_at:c.created_at,incoming,contact,messages:messages.map(m=>({...m,mine:m.sender_id===u.id,sender_id:undefined}))};
+          return {id:c.id,profile_id:c.profile_id,image:profilePhotos(c.profile_id)[0],name:incoming ? c.from_name : c.profile_name,message:c.message,status:c.status,created_at:c.created_at,incoming,contact,contacts,messages:messages.map(m=>({...m,mine:m.sender_id===u.id,sender_id:undefined}))};
         });return json(res,200,{connections:list});
       }
       const response=path.match(/^\/api\/connections\/([a-f0-9-]{36})\/respond$/);
@@ -430,11 +437,11 @@ const server=http.createServer(async(req,res)=>{
         const query=new URL(req.url,origin).searchParams;
         const search=clean(query.get('search') || '',81),status=query.get('status') || 'all',requested=query.get('page') || '1';
         if(search.length>80 || !['all','active','suspended'].includes(status) || !/^[1-9]\d{0,5}$/.test(requested)) fail(400,'Check your search, status filter, and page.');
-        const where="role='member' AND (?='all' OR suspended=?) AND (instr(lower(username),lower(?))>0 OR instr(lower(name),lower(?))>0 OR instr(whatsapp,?)>0)";
-        const params=[status,status==='suspended'?1:0,search,search,search];
+        const where="role='member' AND (?='all' OR suspended=?) AND (instr(lower(username),lower(?))>0 OR instr(lower(name),lower(?))>0 OR instr(whatsapp,?)>0 OR instr(lower(telegram),lower(?))>0 OR instr(lower(line),lower(?))>0)";
+        const params=[status,status==='suspended'?1:0,search,search,search,search,search];
         const total=db.prepare(`SELECT count(*) AS n FROM users WHERE ${where}`).get(...params).n;
         const pageSize=20,pages=Math.max(1,Math.ceil(total/pageSize)),page=Math.min(Number(requested),pages);
-        const members=db.prepare(`SELECT id,username,name,whatsapp,created_at,suspended,suspension_reason,suspended_at,
+        const members=db.prepare(`SELECT id,username,name,whatsapp,telegram,line,created_at,suspended,suspension_reason,suspended_at,
           (SELECT count(*) FROM connections c WHERE c.user_id=users.id) AS introductions
           FROM users WHERE ${where} ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?`).all(...params,pageSize,(page-1)*pageSize);
         const summary=db.prepare("SELECT count(*) AS total,coalesce(sum(suspended),0) AS suspended FROM users WHERE role='member'").get();

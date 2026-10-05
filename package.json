@@ -14,7 +14,7 @@
     "check": "node --check server.mjs && node --check metrics.mjs && node --check public/app.js && node --check ratings.mjs && node --check scripts/rate-profiles.mjs && node --check seo.mjs",
     "rate-profiles": "node scripts/rate-profiles.mjs",
     "import-profiles": "node scripts/import-photos.mjs",
-    "test:browser": "node tests/public-browser.mjs && node tests/featured-browser.mjs"
+    "test:browser": "node tests/public-browser.mjs && node tests/featured-browser.mjs && node tests/contact-browser.mjs"
   },
   "license": "MIT",
   "repository": {

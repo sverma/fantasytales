@@ -59,3 +59,5 @@
 .discovery-top+.featured-invite{margin-top:28px}
 #featured-message{min-height:165px}form[data-form="featured-request"]>.field-help{margin-bottom:18px}
 @media(max-width:800px){.featured-invite{align-items:stretch;flex-direction:column;gap:19px;padding:22px}.featured-invite>.btn{width:100%;white-space:normal;text-align:center}.featured-invite h2{font-size:28px}}
+
+.contact-methods{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:0 0 24px}.contact-method{min-height:44px;padding:10px 6px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--muted);font-size:12px;font-weight:600}.contact-method.active{background:#3b2631;border-color:var(--gold);color:var(--text)}.contact-fields{min-width:0;border:0;padding:0;margin:24px 0 0}.contact-fields legend{font:25px var(--serif);padding:0}.contact-privacy{margin:10px 0 22px}.contact-reveal dl{margin:10px 0 0;display:grid;gap:8px}.contact-reveal dl>div{display:flex;gap:12px;flex-wrap:wrap}.contact-reveal dt{font-weight:700;min-width:65px}.contact-reveal dd{margin:0;overflow-wrap:anywhere}.member-details dd{overflow-wrap:anywhere}

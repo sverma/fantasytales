@@ -9,8 +9,8 @@ ratings. The public site is [fantasytales.org](https://fantasytales.org).
 ## Features
 
 - Responsive public homepage, About, Open Source, Privacy, and Community Guidelines.
-- Separate `/app` with six-digit PIN sign-in, account onboarding, and required
-  WhatsApp contact information before profiles can be viewed.
+- Separate `/app` with six-digit PIN sign-in, account onboarding, and
+  a choice of WhatsApp, Telegram, or LINE contact information before viewing profiles.
 - Private photo galleries, saved profiles, introductions, and messaging after
   acceptance. Contact sharing is optional and follows acceptance.
 - Profile-owner biography editing; member blocking and reporting.
@@ -74,7 +74,7 @@ code and community membership do not require a paid software license.
 Run `npm run rate-profiles` to process changes, or install the included systemd
 timer and queue watcher. The key is stored in the private data directory,
 never returned by the settings API, and excluded from logs and Git. AI requests
-exclude account contact numbers, credentials, conversations, and visit logs.
+exclude account contact details, credentials, conversations, and visit logs.
 
 ## Configuration and deployment
 
@@ -119,7 +119,7 @@ local environment files, private data, and supplied photos are gitignored.
 
 Profiles and media require authentication and contact onboarding. Browser
 restrictions can discourage copying but cannot prevent screenshots or
-photographs of a screen. WhatsApp numbers are required but not verified.
+photographs of a screen. At least one messenger contact is required; details are not verified.
 AI ratings are subjective. Administrator exports are sensitive and should
 remain private. A six-digit PIN needs the included online attempt limits;
 operators may require stronger authentication for their deployment.
