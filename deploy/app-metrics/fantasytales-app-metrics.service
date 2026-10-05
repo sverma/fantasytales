@@ -1,0 +1,31 @@
+[Unit]
+Description=Fantasy Tales application metrics for Ganglia
+After=fantasytales.service ganglia-monitor.service
+Wants=fantasytales.service ganglia-monitor.service
+
+[Service]
+Type=simple
+User=fantasytales
+Group=fantasytales
+ExecStart=/usr/bin/python3 /opt/fantasytales-app-metrics/collector.py
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+CapabilityBoundingSet=
+MemoryMax=96M
+TasksMax=16
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

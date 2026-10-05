@@ -1,0 +1,9 @@
+[Unit]
+Description=Back up Fantasy Tales private records
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/fantasytales/current/deploy/backup.py
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/fantasytales /var/backups/fantasytales

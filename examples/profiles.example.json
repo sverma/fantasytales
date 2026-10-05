@@ -1,0 +1,12 @@
+[
+  {
+    "id": "sample",
+    "name": "Sample profile",
+    "bio": "Replace this example with a consenting adult's own biography.",
+    "prompt": "Replace this with their own headline.",
+    "directory": "./my-private-photos",
+    "cover": "cover.jpg",
+    "exclude": [],
+    "adultConsent": false
+  }
+]

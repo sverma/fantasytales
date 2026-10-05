@@ -1,0 +1,37 @@
+[Unit]
+Description=Fantasy Tales dating community
+After=network.target
+
+[Service]
+Type=simple
+User=fantasytales
+Group=fantasytales
+WorkingDirectory=/opt/fantasytales/current
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=3000
+Environment=APP_ORIGIN=https://fantasytales.org
+Environment=DATA_DIR=/var/lib/fantasytales
+Environment=TRUST_PROXY=1
+Environment=METRICS_SOCKET=/run/fantasytales/metrics.sock
+RuntimeDirectory=fantasytales
+RuntimeDirectoryMode=0700
+ExecStart=/usr/local/bin/node /opt/fantasytales/current/server.mjs
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/fantasytales
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+MemoryMax=512M
+TasksMax=128
+
+[Install]
+WantedBy=multi-user.target

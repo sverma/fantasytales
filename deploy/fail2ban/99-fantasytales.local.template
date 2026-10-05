@@ -1,0 +1,22 @@
+# Render the two exact trusted addresses before installation.
+# This installation protects the website only; it does not change SSH access.
+[sshd]
+enabled = false
+
+[fantasytales-probes]
+enabled = true
+filter = fantasytales-probes
+backend = polling
+usedns = no
+logpath = /var/log/nginx/access.log tail
+          /var/log/nginx/fantasytales-access.log tail
+ignoreip = 127.0.0.0/8 ::1 @SERVER_IP@ @ADMIN_IP@
+ignoreself = true
+findtime = 10m
+maxretry = 12
+bantime = 1h
+bantime.increment = true
+bantime.maxtime = 24h
+bantime.overalljails = false
+maxmatches = 12
+action = iptables-multiport[name=fantasytales-probes, port="80,443", protocol=tcp, blocktype=DROP]

@@ -1,0 +1,37 @@
+[Unit]
+Description=Fantasy Tales Nginx country/status/device/IP live view
+After=nginx.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=fantasytales-logwatch
+Group=fantasytales-logwatch
+SupplementaryGroups=adm
+ExecStart=/usr/local/bin/fantasytales-logwatch --lines 0 --no-header
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=fantasytales-logwatch
+LogRateLimitIntervalSec=0
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+CapabilityBoundingSet=
+MemoryMax=192M
+TasksMax=8
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

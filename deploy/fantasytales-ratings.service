@@ -1,0 +1,23 @@
+[Unit]
+Description=Assess changed Fantasy Tales profiles with OpenAI
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=fantasytales
+Group=fantasytales
+WorkingDirectory=/opt/fantasytales/current
+Environment=DATA_DIR=/var/lib/fantasytales
+Environment=RATING_MEDIA_DIR=/opt/fantasytales/current/private/media
+ExecStart=/usr/local/bin/node /opt/fantasytales/current/scripts/rate-profiles.mjs
+TimeoutStartSec=15min
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/fantasytales
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=384M
+Nice=10

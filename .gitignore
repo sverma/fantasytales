@@ -1,0 +1,26 @@
+# Private runtime data and supplied media never belong in source control.
+data/
+private/
+profile-*/
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-*
+*.db
+*.csv
+*.log
+*.key
+*.pem
+*credentials*
+*secrets*
+profiles.json
+google*.html
+node_modules/
+test-results/
+*.tar.gz
+*.zip
+.DS_Store
+._*
+__pycache__/
+*.pyc

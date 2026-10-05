@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Fantasy Tales AI profile rating check
+
+[Timer]
+OnCalendar=*-*-* 00:30:00 UTC
+Persistent=true
+Unit=fantasytales-ratings.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,9 @@
+[Unit]
+Description=Run an AI rating check requested by the administrator
+
+[Path]
+PathExists=/var/lib/fantasytales/ratings.queue
+Unit=fantasytales-ratings.service
+
+[Install]
+WantedBy=multi-user.target

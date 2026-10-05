@@ -1,0 +1,25 @@
+{
+  "name": "fantasytales",
+  "version": "1.1.0",
+  "type": "module",
+  "description": "Free, open-source dating with AI-powered profile ratings and mutual introductions",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "seed": "node scripts/accounts.mjs seed",
+    "check": "node --check server.mjs && node --check metrics.mjs && node --check public/app.js && node --check ratings.mjs && node --check scripts/rate-profiles.mjs && node --check seo.mjs",
+    "rate-profiles": "node scripts/rate-profiles.mjs",
+    "import-profiles": "node scripts/import-photos.mjs",
+    "test:browser": "node tests/public-browser.mjs"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sverma/fantasytales.git"
+  },
+  "homepage": "https://fantasytales.org"
+}
