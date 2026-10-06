@@ -6,6 +6,9 @@ export const RATING_MODEL='gpt-4.1-mini-2025-04-14';
 export const RATING_VERSION='quality-attractiveness-v1';
 export const DAILY_RATING_LIMIT=24;
 export function initRatings(db) {
+  if(!db.prepare('PRAGMA table_info(profiles)').all().some(column=>column.name==='rating_enabled')) {
+    db.exec('ALTER TABLE profiles ADD COLUMN rating_enabled INTEGER NOT NULL DEFAULT 1 CHECK(rating_enabled IN (0,1))');
+  }
   db.exec(`CREATE TABLE IF NOT EXISTS rating_settings (
     id INTEGER PRIMARY KEY CHECK(id=1),enabled INTEGER NOT NULL DEFAULT 0,
     last_started TEXT,last_finished TEXT,last_status TEXT NOT NULL DEFAULT 'not_configured',
@@ -42,6 +45,7 @@ export function queueRatings(dataDir) {
   writeFileSync(join(dataDir,'ratings.queue'),randomUUID(),{mode:0o600});
 }
 export function publicRating(db,id) {
+  if(!db.prepare('SELECT rating_enabled FROM profiles WHERE id=?').get(id)?.rating_enabled)return null;
   const r=db.prepare('SELECT score,quality,attractiveness,assessed_at,status FROM profile_ratings WHERE profile_id=?').get(id);
   if(!r || r.score===null)return null;
   return {score:r.score,quality:r.quality,attractiveness:r.attractiveness,assessed_at:r.assessed_at,pending:r.status!=='ready'};
@@ -53,9 +57,10 @@ export function adminRatings(db,dataDir) {
     requestsToday:settings.request_day===new Date().toISOString().slice(0,10)?settings.request_count:0,
     running:settings.lease_until>Date.now(),queued:existsSync(join(dataDir,'ratings.queue')),
     lastStarted:settings.last_started,lastFinished:settings.last_finished,lastStatus:settings.last_status,lastError:settings.last_error,
-    profiles:db.prepare(`SELECT p.id,p.name,p.published,r.score,r.quality,r.attractiveness,r.assessed_at,
+    profiles:db.prepare(`SELECT p.id,p.name,p.published,p.rating_enabled,r.score,r.quality,r.attractiveness,r.assessed_at,
       coalesce(r.status,'pending') AS status,coalesce(r.last_error,'') AS error
-      FROM profiles p LEFT JOIN profile_ratings r ON r.profile_id=p.id ORDER BY p.rowid`).all()};
+      FROM profiles p LEFT JOIN profile_ratings r ON r.profile_id=p.id ORDER BY p.rowid`).all()
+      .map(p=>p.rating_enabled?p:{...p,score:null,quality:null,attractiveness:null,assessed_at:null,status:'disabled',error:''})};
 }
 export function profileSnapshot(profile,mediaDir) {
   if(!/^[a-z]+$/.test(profile.id))throw new Error('Invalid profile identifier.');

@@ -21,10 +21,11 @@ export async function runRatings(db,{dataDir,mediaDir,assess=assessProfile,now=(
     if(!db.prepare('SELECT enabled FROM rating_settings WHERE id=1').get().enabled){status='paused';return {status};}
     const key=readRatingKey(dataDir);
     if(!key){status='not_configured';message='Add an OpenAI API key in Admin → AI ratings.';return {status};}
-    const profiles=db.prepare('SELECT id,bio,prompt FROM profiles WHERE published=1 ORDER BY rowid').all();
+    const profiles=db.prepare('SELECT id,bio,prompt FROM profiles WHERE published=1 AND rating_enabled=1 ORDER BY rowid').all();
     for(const profile of profiles) {
       if(now().getTime()-clock>12*60000){status='partial';message='The run reached its time limit; remaining profiles will be checked on the next run.';break;}
       if(!db.prepare('SELECT enabled FROM rating_settings WHERE id=1').get().enabled){status='paused';break;}
+      if(!db.prepare('SELECT 1 FROM profiles WHERE id=? AND published=1 AND rating_enabled=1').get(profile.id)){skipped++;continue;}
       const attempted=now().toISOString();
       try {
         const snapshot=profileSnapshot(profile,mediaDir);
@@ -39,8 +40,8 @@ export async function runRatings(db,{dataDir,mediaDir,assess=assessProfile,now=(
         const assessment=await assess(snapshot,key);
         // A text edit, photo replacement, privacy change, or pause during the API
         // request must not publish an assessment against the wrong profile state.
-        const current=db.prepare('SELECT id,bio,prompt,published FROM profiles WHERE id=?').get(profile.id);
-        if(!current?.published || !db.prepare('SELECT enabled FROM rating_settings WHERE id=1').get().enabled || profileSnapshot(current,mediaDir).hash!==snapshot.hash){skipped++;continue;}
+        const current=db.prepare('SELECT id,bio,prompt,published,rating_enabled FROM profiles WHERE id=?').get(profile.id);
+        if(!current?.published || !current.rating_enabled || !db.prepare('SELECT enabled FROM rating_settings WHERE id=1').get().enabled || profileSnapshot(current,mediaDir).hash!==snapshot.hash){skipped++;continue;}
         if(!assessment) {
           db.prepare(`INSERT INTO profile_ratings(profile_id,content_hash,status,last_error,attempted_at,model) VALUES(?,?,'unavailable',?,?,?)
             ON CONFLICT(profile_id) DO UPDATE SET content_hash=CASE WHEN profile_ratings.score IS NULL THEN excluded.content_hash ELSE profile_ratings.content_hash END,

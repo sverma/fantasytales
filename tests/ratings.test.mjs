@@ -20,6 +20,48 @@ function fixture(t) {
 }
 const good=()=>({quality:4,attractiveness:3,score:3.5});
 
+test('rating preference migration preserves existing profiles and disabled preferences on repeated initialization',t=>{
+  const f=fixture(t);
+  assert.equal(f.db.prepare('SELECT rating_enabled FROM profiles').get().rating_enabled,1);
+  f.db.prepare('UPDATE profiles SET rating_enabled=0').run();
+  initRatings(f.db);
+  assert.equal(f.db.prepare('SELECT rating_enabled FROM profiles').get().rating_enabled,0);
+});
+
+test('excluded profiles are never read or assessed, even after their details change',async t=>{
+  const f=fixture(t);let calls=0;
+  f.db.prepare('UPDATE profiles SET rating_enabled=0').run();
+  rmSync(join(f.mediaDir,'sample'),{recursive:true});
+  const options={...f,assess:()=>{calls++;return good();}};
+  assert.equal((await runRatings(f.db,options)).status,'completed');
+  f.db.prepare("UPDATE profiles SET bio='Updated details'").run();
+  await runRatings(f.db,options);
+  assert.equal(calls,0);
+  assert.equal(f.db.prepare('SELECT request_count FROM rating_settings').get().request_count,0);
+  assert.equal(f.db.prepare('SELECT count(*) AS n FROM profile_ratings').get().n,0);
+  assert.equal(publicRating(f.db,'sample'),null);
+  assert.equal(adminRatings(f.db,f.dataDir).profiles[0].status,'disabled');
+});
+
+test('disabling a rated profile hides its existing score and blocks future assessments',async t=>{
+  const f=fixture(t);await runRatings(f.db,{...f,assess:good});
+  f.db.prepare('UPDATE profiles SET rating_enabled=0').run();
+  assert.equal(publicRating(f.db,'sample'),null);
+  const row=adminRatings(f.db,f.dataDir).profiles[0];
+  assert.equal(row.status,'disabled');assert.equal(row.score,null);assert.equal(row.quality,null);
+  await runRatings(f.db,{...f,assess:()=>assert.fail('Excluded profile was assessed')});
+  assert.equal(f.db.prepare('SELECT count(*) AS n FROM rating_history').get().n,1);
+});
+
+test('disabling ratings during an in-flight assessment prevents publishing its result',async t=>{
+  const f=fixture(t);let finish;
+  const pending=runRatings(f.db,{...f,assess:()=>new Promise(resolve=>{finish=resolve;})});
+  f.db.prepare('UPDATE profiles SET rating_enabled=0').run();
+  finish(good());await pending;
+  assert.equal(f.db.prepare('SELECT count(*) AS n FROM profile_ratings').get().n,0);
+  assert.equal(f.db.prepare('SELECT count(*) AS n FROM rating_history').get().n,0);
+});
+
 test('production CLI runs through a release symlink and consumes a disabled queue without making API calls',t=>{
   const folder=mkdtempSync(join(tmpdir(),'ft-rating-cli-')),dataDir=join(folder,'data');
   t.after(()=>rmSync(folder,{recursive:true,force:true}));

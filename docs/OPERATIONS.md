@@ -44,6 +44,20 @@ uses the existing private profile-import and account-linking workflow.
 Hidden profile owners can also request featuring; already featured owners
 and administrators do not see the invitation.
 
+## Excluding a profile from AI ratings
+
+The private `profiles.rating_enabled` flag defaults to `1` for existing and new
+profiles. An operator can set it to `0` during a private profile import to prohibit
+scoring that profile. Both scheduled and manually queued workers exclude it before
+reading photos or making API requests, and check the flag again before publishing
+an in-flight result. Existing scores are hidden from members, and the administrator
+sees the status `disabled`. Discover cards and profile details omit the rating panel.
+Editing profile text or photos does not reset the preference.
+
+Keep this flag and the supporting worker code when deploying future releases.
+Do not roll back to a worker that predates rating exclusions while an excluded
+profile is published; stop the rating timer, path watcher, and worker first.
+
 ## Public static asset cache
 
 The supplied Nginx configuration caches only `/app.js`, `/styles.css`,
