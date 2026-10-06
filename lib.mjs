@@ -75,8 +75,8 @@ db.exec(`CREATE TABLE IF NOT EXISTS admin_audit (
   actor_username TEXT NOT NULL, target_username TEXT NOT NULL,
   action TEXT NOT NULL, reason TEXT NOT NULL, created_at TEXT NOT NULL
 )`);
-// Additive migration: preserve existing accounts and WhatsApp-only sharing consent.
-for (const name of ['telegram','line']) {
+// Additive migrations preserve existing accounts and optional profile details.
+for (const name of ['telegram','line','objkt_url']) {
   if (!db.prepare('PRAGMA table_info(users)').all().some(column=>column.name===name))
     db.exec(`ALTER TABLE users ADD COLUMN ${name} TEXT NOT NULL DEFAULT ''`);
 }
@@ -90,6 +90,21 @@ export const token = () => randomBytes(32).toString('base64url');
 export const hashToken = value => createHash('sha256').update(value).digest('hex');
 export const validWhatsApp = value => typeof value==='string' && /^\+[1-9]\d{6,14}$/.test(value);
 export const validMessenger = value => typeof value==='string' && value.length<=100 && /^[^\s\u0000-\u001F\u007F]+$/u.test(value) && value!=='@';
+export function normalizeObjktUrl(value) {
+  if(typeof value!=='string')return null;
+  const input=value.trim();
+  if(!input)return '';
+  if(input.length>500 || /[\s\u0000-\u001f\u007f\\]/u.test(input))return null;
+  try {
+    const url=new URL(input);
+    if(url.protocol!=='https:' || url.hostname!=='objkt.com' || url.username || url.password || url.port)return null;
+    if(/%(?:2f|5c)/i.test(url.pathname))return null;
+    const path=decodeURIComponent(url.pathname);
+    if(/[\u0000-\u001f\u007f]/u.test(path))return null;
+    if(!/^\/(?:@[^/\s<>"'?#\\]+|(?:users|profile)\/[^/\s<>"'?#\\]+)(?:\/[a-zA-Z0-9_-]+)*\/?$/u.test(path))return null;
+    return url.href.length<=500?url.href:null;
+  } catch {return null;}
+}
 export const hasContact = user => validWhatsApp(user.whatsapp) || validMessenger(user.telegram) || validMessenger(user.line);
 export const validPIN = value => typeof value==='string' && /^[0-9]{6}$/.test(value);
 export const generatePIN = () => String(randomInt(0,1000000)).padStart(6,'0');

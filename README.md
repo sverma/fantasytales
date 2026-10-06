@@ -14,6 +14,8 @@ ratings. The public site is [fantasytales.org](https://fantasytales.org).
 - Private photo galleries, saved profiles, introductions, and messaging after
   acceptance. Contact sharing is optional and follows acceptance.
 - Profile-owner biography editing; member blocking and reporting.
+- Optional objkt NFT profile links saved in Account and displayed on featured
+  profile details, with no additional signup step.
 - Featured-profile requests from Discover and Account: an editable hello asks
   Admin for the email address to submit photos and profile details for review.
 - Administrator member search, suspension/reactivation, PIN resets, audit

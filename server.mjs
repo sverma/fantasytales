@@ -2,7 +2,7 @@ import http from 'node:http';
 import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, readdirSync, rmSync } from 'node:fs';
 import { join, resolve, extname } from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
-import { db, dataDir, token, hashToken, hashPassword, checkPassword, exportCSV, validWhatsApp, validMessenger, hasContact, validPIN, generatePIN } from './lib.mjs';
+import { db, dataDir, token, hashToken, hashPassword, checkPassword, exportCSV, validWhatsApp, validMessenger, hasContact, validPIN, generatePIN, normalizeObjktUrl } from './lib.mjs';
 import {publicRating,adminRatings,saveRatingKey,readRatingKey,queueRatings} from './ratings.mjs';
 import {createAppMetrics} from './metrics.mjs';
 import {publicPaths,publicPage,robots,sitemap} from './seo.mjs';
@@ -50,7 +50,7 @@ function rotateSession(req,res,userId) {
   return csrf;
 }
 function getUser(s) {
-  const u=s?.user_id ? db.prepare("SELECT id,username,name,whatsapp,telegram,line,contact_done,role,profile_id,auth_kind='password' AS needs_pin FROM users WHERE id=? AND suspended=0").get(s.user_id) : null;
+  const u=s?.user_id ? db.prepare("SELECT id,username,name,whatsapp,telegram,line,objkt_url,contact_done,role,profile_id,auth_kind='password' AS needs_pin FROM users WHERE id=? AND suspended=0").get(s.user_id) : null;
   return u ? {...u,contact_done:Number(hasContact(u))} : null;
 }
 function requireUser(s,allowLegacy=false) {
@@ -285,6 +285,8 @@ const server=http.createServer(async(req,res)=>{
       if(req.method==='PATCH' && path==='/api/me') {
         const b=await body(req),current=requireUser(s),name='name' in b ? clean(b.name,61) : current.name;
         if('name' in b && (name.length<2 || name.length>60)) fail(400,'Please enter a name between 2 and 60 characters.');
+        const objktUrl='objkt_url' in b?normalizeObjktUrl(b.objkt_url):current.objkt_url;
+        if(objktUrl===null)fail(400,'Enter an HTTPS objkt.com profile URL, such as https://objkt.com/@yourname, or leave it blank.');
         const contacts={whatsapp:current.whatsapp,telegram:current.telegram,line:current.line};
         const changed=['whatsapp','telegram','line'].filter(key=>key in b);
         for(const key of changed) {
@@ -295,10 +297,11 @@ const server=http.createServer(async(req,res)=>{
         }
         if(changed.length && !hasContact(contacts))fail(400,'Add at least one: WhatsApp number, Telegram username, or LINE ID.');
         // Validate the full merged update before writing any field.
-        db.prepare('UPDATE users SET name=?,whatsapp=?,telegram=?,line=?,contact_done=? WHERE id=?')
-          .run(name,contacts.whatsapp,contacts.telegram,contacts.line,Number(hasContact(contacts)),u.id);
+        db.prepare('UPDATE users SET name=?,whatsapp=?,telegram=?,line=?,objkt_url=?,contact_done=? WHERE id=?')
+          .run(name,contacts.whatsapp,contacts.telegram,contacts.line,objktUrl,Number(hasContact(contacts)),u.id);
         if('name' in b)log(req,res,'NAME_SAVED',{name,userId:u.id});
         if(changed.length)log(req,res,'CONTACT_SAVED',{provided:hasContact(contacts),userId:u.id});
+        if('objkt_url' in b)log(req,res,'NFT_PROFILE_SAVED',{provided:Boolean(objktUrl),userId:u.id});
         if('name' in b || changed.length)syncExport();
         return json(res,200,{user:getUser(s)});
       }
@@ -336,7 +339,8 @@ const server=http.createServer(async(req,res)=>{
       }
       if(req.method==='GET' && path==='/api/profiles') {
         requireProfileAccess(u);
-        const list=db.prepare(`SELECT p.*,EXISTS(SELECT 1 FROM favorites f WHERE f.user_id=? AND f.profile_id=p.id) AS saved FROM profiles p WHERE p.published=1 ORDER BY p.rowid`).all(u.id)
+        const list=db.prepare(`SELECT p.*,coalesce(owner.objkt_url,'') AS objkt_url,EXISTS(SELECT 1 FROM favorites f WHERE f.user_id=? AND f.profile_id=p.id) AS saved
+          FROM profiles p LEFT JOIN users owner ON owner.profile_id=p.id WHERE p.published=1 ORDER BY p.rowid`).all(u.id)
           .filter(p=>!isBlocked(u.id,profileOwner(p.id)?.id))
           .map(p=>{const photos=profilePhotos(p.id);return {...p,image:photos[0] || '/assets/profile-placeholder.svg',photos,rating:publicRating(db,p.id)};});
         return json(res,200,{profiles:list});

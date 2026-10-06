@@ -44,6 +44,30 @@ uses the existing private profile-import and account-linking workflow.
 Hidden profile owners can also request featuring; already featured owners
 and administrators do not see the invitation.
 
+## Optional objkt NFT profile link
+
+Members can add, update, or clear an optional objkt URL in **Account → Your NFT
+profile**. Signup and contact onboarding do not ask for it, and the link does not
+replace the required WhatsApp, Telegram, or LINE detail. When an account is linked
+to a published featured profile, its URL appears in that profile's details for
+signed-in members. Hidden profiles and ordinary member accounts do not expose it
+through Discover. Existing blocking and contact gates still apply.
+
+Startup adds `users.objkt_url` with an empty default and preserves existing data.
+`PATCH /api/me` accepts only HTTPS `objkt.com` profile URLs: short `/@name` links,
+current `/users/address` links (including profile tabs), and legacy `/profile/address`
+links. Clearing the field removes the displayed link. URLs are not fetched and
+ownership is not verified; they are not included in AI assessments or contact CSVs.
+Activity logs record only whether a link was provided, not the URL itself.
+
+The profile link opens a new tab with `noopener noreferrer nofollow`. Changed app
+assets use a new URL version. A rollback preserves the extra database column and
+saved URLs, though an earlier application will not display them.
+
+Run `node tests/objkt-browser.mjs` with `PLAYWRIGHT_MODULE` set when Playwright is
+not available as a local dependency. It uses fictional local profiles and intercepts
+the external navigation without making requests to objkt.
+
 ## Excluding a profile from AI ratings
 
 The private `profiles.rating_enabled` flag defaults to `1` for existing and new
