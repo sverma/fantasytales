@@ -15,7 +15,7 @@ using the HTTPS Nginx configuration.
 3. Copy the repository into a new release directory, excluding `.git`, tests,
    local environment files, credentials, and developer output. Do not serve
    the repository as an unrestricted static document root.
-4. Configure the private data/media locations. Import profiles through the
+4. Run `npm ci --omit=dev` in the release directory. Configure the private data/media locations. Import profiles through the
    private manifest tool if needed, then run the account seed tool as the
    service user. Read the generated handoff file privately.
 5. Point `/opt/fantasytales/current` to the release. Install the service,
@@ -25,6 +25,13 @@ using the HTTPS Nginx configuration.
    Create `/var/cache/nginx/fantasytales-static` owned by the Nginx worker user
    (`www-data` on Ubuntu), mode 0700, for the bounded public-asset cache.
    Its parent `/var/cache/nginx` must be traversable (root-owned, mode 0755).
+   Install `deploy/photo-cache-http.conf` and `deploy/photo-cache-locations.conf`
+   as `/etc/nginx/fantasytales-photo-cache-http.conf` and
+   `/etc/nginx/fantasytales-photo-cache-locations.conf`. Create
+   `/var/cache/nginx/fantasytales-photos` owned by `www-data`, mode 0700.
+   Nginx must include `http_auth_request_module`; verify with `nginx -V`.
+   The photo-cache snippets must be installed together, with the authorization
+   location enabled before any shared photo caching is allowed.
    The proxy must overwrite X-Real-IP; do not expose Node directly to the
    internet when `TRUST_PROXY=1` is enabled.
 7. Validate `nginx -t` and the systemd unit files. Enable/start the app and
@@ -43,6 +50,17 @@ Preserve `private/media`, the data directory, and external operator settings.
 Never replace a live release with a clean Git checkout that omits its galleries.
 The repository starts with no profiles; existing profile/account rows remain
 in SQLite and are not reseeded or removed by startup.
+
+Run `npm ci --omit=dev` in the new release; native Sharp binaries must match the
+server OS/architecture. Do not copy local `node_modules` to another platform.
+Optionally precompute all display sizes as the service user with
+`DATA_DIR=/var/lib/fantasytales node scripts/prepare-photos.mjs` from the new release.
+New or replaced photos are also processed automatically on their first request.
+
+For an existing Nginx installation, retain monitoring locations and add the two
+photo-cache includes from the template. Back up its configuration first and
+validate with `nginx -t` before reloading. Never add `proxy_ignore_headers
+Cache-Control` to an unprotected or general-purpose location.
 
 Run syntax/tests before switching. Switch the symlink atomically, restart the
 app, and check `/health`, `/sitemap.xml`, authentication, and application metrics.

@@ -1,5 +1,6 @@
 import {recordAuthentication,pruneAuthentication,activityOptions,readAdminActivity} from './activity.mjs';
 import http from 'node:http';
+import {createPhotoStore} from './photo-media.mjs';
 import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, readdirSync, rmSync } from 'node:fs';
 import { join, resolve, extname } from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
@@ -10,6 +11,7 @@ import {publicPaths,publicPage,robots,sitemap} from './seo.mjs';
 
 const root = import.meta.dirname;
 const mediaDir = resolve(process.env.MEDIA_DIR || join(root,'private','media'));
+const photoStore=createPhotoStore({mediaDir,cacheDir:join(dataDir,'photo-variants')});
 const origin = process.env.APP_ORIGIN || 'http://localhost:3000';
 const production = process.env.NODE_ENV === 'production';
 const secure = origin.startsWith('https://');
@@ -164,6 +166,13 @@ function profilePhotos(id) {
     .sort((a,b)=>a.startsWith('portrait.')?-1:b.startsWith('portrait.')?1:a.localeCompare(b))
     .map(name=>`/media/${id}/${name}`);
 }
+function authorizeVariant(path,s,count=true) {
+  const u=requireProfileAccess(requireUser(s)),item=photoStore.resolve(path);
+  profileById(item.profile);
+  if(isBlocked(u.id,profileOwner(item.profile)?.id))fail(404,'This photo is not available.');
+  if(count)rate(`media:${u.id}`,300,60000);
+  return item;
+}
 function profileOwner(id) { return db.prepare('SELECT id,name,whatsapp FROM users WHERE profile_id=?').get(id); }
 function isBlocked(a,b) { return b && db.prepare('SELECT 1 FROM blocks WHERE (blocker_id=? AND blocked_id=?) OR (blocker_id=? AND blocked_id=?)').get(a,b,b,a); }
 function connectionFor(id,u) {
@@ -184,6 +193,7 @@ function housekeeping() {
   db.prepare('DELETE FROM visits WHERE created_at<?').run(Date.now()-30*86400000);
   db.prepare('DELETE FROM admin_audit WHERE created_at<?').run(new Date(Date.now()-30*86400000).toISOString());
   pruneAuthentication(db);
+  photoStore.prune();
   syncExport();
 }
 housekeeping();
@@ -223,8 +233,15 @@ const server=http.createServer(async(req,res)=>{
       }
     }
     if(path.startsWith('/api/') || path.startsWith('/media/') || path==='/app')res.setHeader('X-Robots-Tag','noindex, nofollow, noimageindex');
-    if(path.startsWith('/api/')) rate(`api:${getIP(req)}`,300,60000);
+    if(path.startsWith('/api/')&&path!=='/api/media-authorize') rate(`api:${getIP(req)}`,300,60000);
     const s=session(req,res,path==='/api/session' && req.method==='GET');
+    if(path==='/api/media-authorize'&&req.method==='GET') {
+      const original=req.headers['x-original-uri'];
+      if(typeof original!=='string'||!original.startsWith('/media/')||original.length>400)fail(403,'Photo access denied.');
+      try{authorizeVariant(new URL(original,origin).pathname,s);}
+      catch(error){if(error.status===404)fail(403,'Photo access denied.');throw error;}
+      res.writeHead(204);return res.end();
+    }
     if(path.startsWith('/api/')) {
       if(req.method==='GET' && path==='/api/session') {
         const v=visit(req,res,true);
@@ -342,10 +359,10 @@ const server=http.createServer(async(req,res)=>{
       }
       if(req.method==='GET' && path==='/api/profiles') {
         requireProfileAccess(u);
-        const list=db.prepare(`SELECT p.*,coalesce(owner.objkt_url,'') AS objkt_url,EXISTS(SELECT 1 FROM favorites f WHERE f.user_id=? AND f.profile_id=p.id) AS saved
+        const list=await Promise.all(db.prepare(`SELECT p.*,coalesce(owner.objkt_url,'') AS objkt_url,EXISTS(SELECT 1 FROM favorites f WHERE f.user_id=? AND f.profile_id=p.id) AS saved
           FROM profiles p LEFT JOIN users owner ON owner.profile_id=p.id WHERE p.published=1 ORDER BY p.rowid`).all(u.id)
           .filter(p=>!isBlocked(u.id,profileOwner(p.id)?.id))
-          .map(p=>{const photos=profilePhotos(p.id);return {...p,image:photos[0] || '/assets/profile-placeholder.svg',photos,rating:publicRating(db,p.id)};});
+          .map(async p=>{const photos=profilePhotos(p.id);return {...p,image:photos[0] || '/assets/profile-placeholder.svg',photos,photoVariants:await Promise.all(photos.map(url=>photoStore.descriptor(p.id,url.split('/').pop()))),rating:publicRating(db,p.id)};}));
         return json(res,200,{profiles:list});
       }
       if(req.method==='GET' && path==='/api/featured-request') {
@@ -544,6 +561,14 @@ const server=http.createServer(async(req,res)=>{
       fail(404,'That page could not be found.');
     }
     if(req.method!=='GET' && req.method!=='HEAD') fail(405,'Method not allowed.');
+    if(path.startsWith('/media/')&&path.endsWith('.webp')) {
+      authorizeVariant(path,s);
+      const bytes=await photoStore.image(path);
+      authorizeVariant(path,session(req,res),false);
+      res.setHeader('X-Robots-Tag','noindex, noimageindex, noarchive');
+      res.writeHead(200,{'Content-Type':'image/webp','Content-Length':bytes.length,'Content-Disposition':'inline'});
+      return res.end(req.method==='HEAD'?undefined:bytes);
+    }
     const media=path.match(/^\/media\/([a-z]+)\/((?:portrait|photo-\d{2})\.(?:jpg|png))$/);
     if(media) {
       const u=requireProfileAccess(requireUser(s));profileById(media[1]);

@@ -138,8 +138,9 @@ CSS, JavaScript, and larger SVGs are compressed with gzip when accepted by
 the browser, with `Vary: Accept-Encoding`. WOFF2 is already compressed.
 Inspect two successive requests to an asset: `X-Static-Cache` should change
 from `MISS` to `HIT`; `Cache-Control` should remain `public, max-age=3600`.
-Missing files must stay uncached. The application shell, APIs, and profile
-photos must retain `Cache-Control: no-store` and their authorization checks.
+Missing files must stay uncached. The application shell, APIs, and original
+profile photos must retain `Cache-Control: no-store` and their authorization checks.
+Optimized variants use the separate, authorized photo cache described below.
 
 After changing code or rolling back a release, clear only this regenerable
 cache as root, after the app is serving the intended release:
@@ -195,3 +196,47 @@ configuration template. Adapt log paths, local management allowlists, and
 thresholds. Review matches before enabling a jail. Do not classify ordinary
 successful traffic, all 404s, or every authentication failure as an attack.
 Fail2ban is not a substitute for upstream DDoS protection.
+
+
+## Protected photo delivery
+
+Original PNG/JPEG files stay private and unchanged in `MEDIA_DIR`. The app creates
+WebP variants in `DATA_DIR/photo-variants`, automatically rotates their orientation,
+removes embedded metadata, and preserves aspect ratio without upscaling. Widths
+are 128 (thumbnails), 480/960 (cards), and up to 1440 (gallery). Versioned URLs
+include a hash of the original and the processing recipe. Every request checks
+that the file still exists and the revision is current. A changed or removed
+photo immediately invalidates its old cached URL.
+
+Discover requests cards within 200 pixels of the viewport. Gallery thumbnails
+use their own small variants; full gallery images load when selected. The
+protected original is a fallback if a browser cannot decode a variant.
+The gallery/AI source directory does not contain generated copies, so optimization
+does not trigger rating changes or alter supplied photos.
+
+Nginx's dedicated photo cache is bounded at 256 MB with 24-hour inactivity expiry.
+Only the strict, versioned WebP location uses it. An uncached `auth_request`
+subrequest checks the current session, PIN/contact requirements, suspension,
+profile visibility, mutual blocks, original existence, and revision before
+**every** cache hit or miss. The application rechecks authorization on cache
+misses as well. Failed or unavailable authorization denies delivery; authorization
+responses and image errors are never cached. Original-image URLs are uncached.
+
+`X-Photo-Cache` reports `MISS` or `HIT` after authorization succeeds. Browsers
+continue to receive `Cache-Control: private, no-store`; only the controlled
+server cache retains bytes. Photo copies use restrictive filesystem permissions.
+Never remove the authorization gate while retaining the shared cache. A safe
+rollback removes both photo-cache includes before returning to code without
+the authorization endpoint. Do not replace current monitoring includes.
+
+The private application variant store is pruned at startup and hourly to 256 MB
+and seven days. Missing variants regenerate automatically. Nginx validates
+current original revisions even if a stored variant was pruned. Internal photo
+authorization subrequests are excluded from application HTTP metrics; Nginx
+cache hits, like cached public assets, do not reach image processing.
+
+Run `npm run prepare-photos` to warm all private variants after a bulk import;
+this does not publish profiles or invoke AI. Run `npm run test:nginx` with Nginx
+on PATH (or `NGINX_BIN=/path/to/nginx`) for isolated cache/privacy tests. The test
+uses temporary data, high local ports, and fictional accounts, and never changes
+the machine's normal Nginx configuration.

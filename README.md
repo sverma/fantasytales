@@ -14,6 +14,8 @@ ratings. The public site is [fantasytales.org](https://fantasytales.org).
 - Responsive public homepage, About, Open Source, Privacy, and Community Guidelines.
 - Separate `/app` with six-digit PIN sign-in, account onboarding, and
   a choice of WhatsApp, Telegram, or LINE contact information before viewing profiles.
+- Optimized private photo variants, real thumbnails, bounded lazy loading, and
+  optional Nginx caching with authorization on every photo request.
 - Private photo galleries, saved profiles, introductions, and messaging after
   acceptance. Contact sharing is optional and follows acceptance.
 - Profile-owner biography editing; member blocking and reporting.
@@ -42,11 +44,13 @@ installations begin with no member profiles.
 ## Quick start
 
 Requires **Node.js 24+**. The application uses built-in Node modules and SQLite;
-there are no runtime npm dependencies.
+Sharp is the image-processing dependency; install the locked packages with
+`npm ci`. Original photos remain unchanged.
 
 ```sh
 git clone https://github.com/sverma/fantasytales.git
 cd fantasytales
+npm ci
 cp .env.example .env
 node --env-file=.env scripts/accounts.mjs seed
 node --env-file=.env server.mjs

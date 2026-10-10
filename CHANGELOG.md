@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Private WebP display variants at 128, 480, 960, and 1440 pixels wide, with
+  automatic orientation and metadata removal. Originals and AI rating inputs
+  remain unchanged.
+- Actual thumbnail files and viewport-based loading reduce unnecessary transfers.
+- Protected Nginx photo caching checks current session, contact onboarding,
+  visibility, blocks, and photo revision on every request, including cache hits.
+- Added Sharp and a locked dependency manifest; run `npm ci` during upgrades.
+
 ## 0.2.0 — 2026-10-10
 
 First tagged public release of Fantasy Tales, collecting the application and

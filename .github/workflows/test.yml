@@ -10,8 +10,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - run: npm ci
       - run: npm run check
       - run: npm test
+      - run: sudo apt-get update && sudo apt-get install -y nginx
+      - run: npm run test:nginx
       - run: python3 tests/app-metrics-collector.py && python3 tests/logwatch.py
       - run: npm install --no-save --package-lock=false playwright
       - run: npx playwright install --with-deps chromium

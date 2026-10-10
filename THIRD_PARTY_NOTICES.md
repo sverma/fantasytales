@@ -10,3 +10,7 @@ Node.js, SQLite, Nginx, Ganglia, PHP, Fail2ban, RRDTool, and OpenAI services are
 separate dependencies or optional integrations; their respective licenses and
 service terms apply. They are not relicensed by this repository. Member photos,
 profiles, private data, and credentials are not distributed here.
+
+Sharp is installed through npm under its Apache-2.0 license. Its bundled native
+image libraries retain their own licenses and notices in the installed packages.
+They are not relicensed by this repository.

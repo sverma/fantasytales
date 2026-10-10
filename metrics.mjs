@@ -10,7 +10,7 @@ const histogram=()=>createHistogram({lowest:1,highest:3_600_000_000,figures:2});
 export function routeGroup(raw) {
   let path;
   try {path=new URL(raw,'http://local').pathname;}catch{return 'other';}
-  if(path==='/health')return null;
+  if(path==='/health'||path==='/api/media-authorize')return null;
   if(path.startsWith('/api/auth/'))return 'auth';
   if(path.startsWith('/api/admin'))return 'admin';
   if(path.startsWith('/api/connections'))return 'connections';

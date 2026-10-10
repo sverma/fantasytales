@@ -8,7 +8,7 @@ export async function setupFixture(data) {
   execFileSync(process.execPath,['--input-type=module','-e',"import {db} from './lib.mjs';db.close();"],{cwd:root,env:{...process.env,DATA_DIR:data},stdio:'pipe'});
   const db=new DatabaseSync(join(data,'fantasytales.sqlite'));
   const media=join(data,'media');
-  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==','base64');
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWOY6ZL2HwAFAAJDFuukNQAAAABJRU5ErkJggg==','base64');
   for(const [id,name,count] of [['alex','Alex',6],['blair','Blair',9],['casey','Casey',10],['drew','Drew',9],['admin','Admin',1],['eden','Eden',2],['frankie','Frankie',4]]) {
     db.prepare('INSERT INTO profiles(id,name,bio,prompt) VALUES(?,?,?,?)').run(id,name,'A fictional adult profile used only for automated testing.','A synthetic test introduction.');
     const folder=join(media,id);mkdirSync(folder,{recursive:true});
