@@ -2,6 +2,9 @@
 
 **Free, open-source, AI-powered dating.**
 
+Current release: [v0.2.0](https://github.com/sverma/fantasytales/releases/tag/v0.2.0).
+See the [changelog](CHANGELOG.md) for release highlights and upgrade notes.
+
 Fantasy Tales is an adults-only dating community with a dark burgundy and gold
 interface, member-only profiles, mutual introductions, and optional AI profile
 ratings. The public site is [fantasytales.org](https://fantasytales.org).
