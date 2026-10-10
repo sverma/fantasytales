@@ -1,5 +1,40 @@
 # Optional operations
 
+## Admin activity
+
+In **Admin → Activity**, administrators can watch successful sign-ins and new
+accounts from the last 30 days, and introductions with their current status.
+Times use Asia/Kolkata (IST), regardless of the browser's timezone. Each list
+has ten entries per page. Introduction filters include **Admin only** and status.
+The counters cover successful authentication and introductions in the last
+24 hours, plus all pending introductions addressed to an administrator.
+
+The first page refreshes every 30 seconds while visible. Polling pauses on older
+pages and while a filter is focused; **Refresh activity** also works manually.
+Use **Open your inbox** to respond to introductions addressed to your own profile.
+The activity feed excludes PINs, passwords, IPs, contacts, and message contents.
+It is administrator-only, served with `no-store`, and cleared when access expires.
+
+Startup adds `auth_activity` and indexes without changing existing accounts,
+profiles, or introductions. Successful authentication is recorded server-side,
+even without a client visit ID. Failed attempts are not counted as logins.
+Housekeeping removes history older than 30 days; account deletion cascades to
+its authentication history. Introductions retain their existing lifecycle.
+
+For an existing installation, recover available authentication history once:
+
+```sh
+DATA_DIR=/private/path/to/data node scripts/import-login-history.mjs
+```
+
+Run this as the application user during a maintenance window after backing up
+the database. The importer reads retained visit files without exporting their
+contents, checks the current account identity and creation time, ignores symlinks
+and files over 5 MB, and is safe to rerun. Earlier records may be incomplete if
+visit tracking was absent. Only successful signup/sign-in records are imported;
+old PIN-only events lack sufficient identity information. A rollback can leave
+the additive table in place; older code simply does not display or populate it.
+
 ## Messenger contact options
 
 Members provide at least one WhatsApp number, Telegram username, or LINE ID to

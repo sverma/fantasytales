@@ -20,6 +20,8 @@ ratings. The public site is [fantasytales.org](https://fantasytales.org).
   Admin for the email address to submit photos and profile details for review.
 - Administrator member search, suspension/reactivation, PIN resets, audit
   history, profile publishing, AI configuration, and private CSV exports.
+- Admin Activity with recent successful logins, introduction status filters,
+  IST timestamps, pagination, and automatic refresh every 30 seconds.
 - Daily AI reassessment when profile text or photos change; unchanged profiles
   retain their scores. Ratings combine profile quality and a subjective visual
   impression. They do not verify identity or predict compatibility.

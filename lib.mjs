@@ -4,6 +4,7 @@ import { promisify } from 'node:util';
 import { mkdirSync, chmodSync, writeFileSync, renameSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { initRatings } from './ratings.mjs';
+import { initActivity } from './activity.mjs';
 
 export const dataDir = resolve(process.env.DATA_DIR || './data');
 mkdirSync(dataDir, { recursive: true, mode: 0o700 });
@@ -84,6 +85,7 @@ if (!db.prepare('PRAGMA table_info(connections)').all().some(column=>column.name
   db.exec('ALTER TABLE connections ADD COLUMN share_messengers INTEGER NOT NULL DEFAULT 0 CHECK(share_messengers IN (0,1))');
 chmodSync(join(dataDir, 'fantasytales.sqlite'), 0o600);
 initRatings(db);
+initActivity(db);
 
 const scrypt = promisify(scryptCallback);
 export const token = () => randomBytes(32).toString('base64url');

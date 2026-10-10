@@ -1,3 +1,4 @@
+import {recordAuthentication,pruneAuthentication,activityOptions,readAdminActivity} from './activity.mjs';
 import http from 'node:http';
 import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, readdirSync, rmSync } from 'node:fs';
 import { join, resolve, extname } from 'node:path';
@@ -138,10 +139,10 @@ function visit(req,res,create=false) {
   }
   return v;
 }
-function log(req,res,event,details={}) {
+function log(req,res,event,details={},at=new Date().toISOString()) {
   metrics.event(event,event==='PAGE_OPENED'?details.page:event==='INTRODUCTION_UPDATED'?details.status:undefined);
   const v=visit(req,res);
-  if(v) appendFileSync(join(dataDir,'visits',v.file),`${new Date().toISOString()} ${event} ${JSON.stringify(details)}\n`);
+  if(v) appendFileSync(join(dataDir,'visits',v.file),`${at} ${event} ${JSON.stringify(details)}\n`);
 }
 async function body(req) {
   if(!(req.headers['content-type'] || '').startsWith('application/json')) fail(415,'Send JSON content.');
@@ -182,6 +183,7 @@ function housekeeping() {
   if(existsSync(dir)) for(const d of readdirSync(dir)) if(/^\d{4}-\d{2}-\d{2}$/.test(d) && d<cutoff) rmSync(join(dir,d),{recursive:true,force:true});
   db.prepare('DELETE FROM visits WHERE created_at<?').run(Date.now()-30*86400000);
   db.prepare('DELETE FROM admin_audit WHERE created_at<?').run(new Date(Date.now()-30*86400000).toISOString());
+  pruneAuthentication(db);
   syncExport();
 }
 housekeeping();
@@ -248,7 +250,6 @@ const server=http.createServer(async(req,res)=>{
             try { result=db.prepare("INSERT INTO users(username,password,auth_kind,created_at,consent_at) VALUES(?,?,'pin',?,?)").run(username,hashed,now,now); }
             catch(e) { if(String(e.message).includes('UNIQUE')) fail(409,'That username is already taken.'); throw e; }
             u={id:Number(result.lastInsertRowid)};
-            log(req,res,'ACCOUNT_CREATED',{userId:u.id,username});
           } else {
             const eligible=u?.auth_kind===(migrating?'password':'pin');
             const valid=await checkPassword(migrating?b.currentPassword:b.pin,eligible?u.password:dummyPassword);
@@ -256,15 +257,17 @@ const server=http.createServer(async(req,res)=>{
             if(u.suspended) fail(403,'This account is suspended. Contact the community organizer for help.');
             if(migrating) {
               replaceCredential(u,await hashPassword(b.pin));
-              log(req,res,'PIN_CREATED',{userId:u.id});
             } else {
               const current=db.prepare('SELECT password,suspended FROM users WHERE id=?').get(u.id);
               if(current?.password!==u.password || current.suspended) fail(401,'Your sign-in details changed. Please sign in again.');
             }
             credentialSuccess(username);
-            log(req,res,'SIGNED_IN',{userId:u.id,username});
           }
           const nextCsrf=rotateSession(req,res,u.id);
+          const kind=path.endsWith('/signup')?'signup':migrating?'pin_migration':'login';
+          const authenticatedAt=recordAuthentication(db,u.id,kind);
+          log(req,res,({signup:'ACCOUNT_CREATED',pin_migration:'PIN_CREATED',login:'SIGNED_IN'})[kind],{userId:u.id,username},authenticatedAt);
+          if(migrating)metrics.event('SIGNED_IN');
           return json(res,200,{csrf:nextCsrf,user:getUser({user_id:u.id})});
         } finally { passwordWork--; }
       }
@@ -435,6 +438,11 @@ const server=http.createServer(async(req,res)=>{
       if(path==='/api/owner/profile' && req.method==='GET') {
         if(!u.profile_id) fail(403,'No profile is linked to your account.');
         return json(res,200,{profile:db.prepare('SELECT * FROM profiles WHERE id=?').get(u.profile_id)});
+      }
+      if(path==='/api/admin/activity' && req.method==='GET') {
+        requireAdmin(s);
+        let options;try{options=activityOptions(new URL(req.url,origin).searchParams);}catch(error){fail(400,error.message);}
+        return json(res,200,readAdminActivity(db,options,{hasContact}));
       }
       if(path==='/api/admin/members' && req.method==='GET') {
         requireAdmin(s);
